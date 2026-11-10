@@ -23,6 +23,10 @@ public class Milestone extends BaseEntity {
 
     private String deliverableUrl;
 
+    /** Latest verifier-agent report (scores, evidence, scanner findings, gate outcome). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String verificationJson;
+
     @Enumerated(EnumType.STRING)
     private MilestoneStatus status = MilestoneStatus.PENDING;
 
@@ -43,6 +47,8 @@ public class Milestone extends BaseEntity {
     public void setCriteriaJson(String criteriaJson) { this.criteriaJson = criteriaJson; }
     public String getDeliverableUrl() { return deliverableUrl; }
     public void setDeliverableUrl(String deliverableUrl) { this.deliverableUrl = deliverableUrl; }
+    public String getVerificationJson() { return verificationJson; }
+    public void setVerificationJson(String verificationJson) { this.verificationJson = verificationJson; }
     public MilestoneStatus getStatus() { return status; }
     public void setStatus(MilestoneStatus status) { this.status = status; }
 }

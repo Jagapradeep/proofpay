@@ -1,5 +1,6 @@
 package dev.proofpay.api;
 
+import dev.proofpay.ai.AiUnavailableException;
 import dev.proofpay.api.ApiDtos.ApiError;
 import dev.proofpay.paypal.PayPalApiException;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(PayPalApiException.class)
     ResponseEntity<ApiError> paypal(PayPalApiException e) {
         return error(HttpStatus.BAD_GATEWAY, e.getMessage());
+    }
+
+    @ExceptionHandler(AiUnavailableException.class)
+    ResponseEntity<ApiError> ai(AiUnavailableException e) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
     }
 
     private static ResponseEntity<ApiError> error(HttpStatus status, String message) {

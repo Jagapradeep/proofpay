@@ -35,13 +35,15 @@ public final class ApiDtos {
             boolean injectionFlagged,
             List<String> evidence) {}
 
+    public record AcceptCriteriaRequest(@NotNull dev.proofpay.ai.CriteriaService.Party party) {}
+
     // ---- responses ----
 
     public record MilestoneView(UUID id, int seq, String title, BigDecimal amount, MilestoneStatus status,
-                                String deliverableUrl, String criteriaJson) {
+                                String deliverableUrl, String criteriaJson, String verificationJson) {
         static MilestoneView of(Milestone m) {
             return new MilestoneView(m.getId(), m.getSeq(), m.getTitle(), m.getAmount(), m.getStatus(),
-                    m.getDeliverableUrl(), m.getCriteriaJson());
+                    m.getDeliverableUrl(), m.getCriteriaJson(), m.getVerificationJson());
         }
     }
 
@@ -56,10 +58,12 @@ public final class ApiDtos {
 
     public record JobView(UUID id, String title, String description, String clientEmail, String freelancerEmail,
                           String currency, BigDecimal totalAmount, JobStatus status, Instant createdAt,
+                          Instant clientAcceptedCriteriaAt, Instant freelancerAcceptedCriteriaAt,
                           List<MilestoneView> milestones, AuthorizationView funding) {
         static JobView of(Job j, PaymentAuthorization a) {
             return new JobView(j.getId(), j.getTitle(), j.getDescription(), j.getClientEmail(), j.getFreelancerEmail(),
                     j.getCurrency(), j.getTotalAmount(), j.getStatus(), j.getCreatedAt(),
+                    j.getClientAcceptedCriteriaAt(), j.getFreelancerAcceptedCriteriaAt(),
                     j.getMilestones().stream().map(MilestoneView::of).toList(), AuthorizationView.of(a));
         }
     }

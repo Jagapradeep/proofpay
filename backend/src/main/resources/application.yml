@@ -30,6 +30,13 @@ paypal:
 proofpay:
   # Backup for webhooks: how often to re-check pending captures and payouts
   poll-interval-ms: 30000
+  ai:
+    openai-api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-5-mini}
+    # Only for reasoning models (gpt-5*, o*); leave blank for gpt-4.1 etc.
+    reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
+    timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:120}
+    github-token: ${GITHUB_TOKEN:}
 
 management:
   endpoints:

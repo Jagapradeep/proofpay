@@ -3,6 +3,7 @@ package dev.proofpay.domain;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,6 +20,10 @@ public class Job extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     private JobStatus status = JobStatus.DRAFT;
+
+    /** Both sides must accept the compiled criteria before the job can be funded. */
+    private Instant clientAcceptedCriteriaAt;
+    private Instant freelancerAcceptedCriteriaAt;
 
     @OneToMany(mappedBy = "job", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("seq")
@@ -51,4 +56,12 @@ public class Job extends BaseEntity {
     public JobStatus getStatus() { return status; }
     public void setStatus(JobStatus status) { this.status = status; }
     public List<Milestone> getMilestones() { return milestones; }
+    public Instant getClientAcceptedCriteriaAt() { return clientAcceptedCriteriaAt; }
+    public void setClientAcceptedCriteriaAt(Instant t) { this.clientAcceptedCriteriaAt = t; }
+    public Instant getFreelancerAcceptedCriteriaAt() { return freelancerAcceptedCriteriaAt; }
+    public void setFreelancerAcceptedCriteriaAt(Instant t) { this.freelancerAcceptedCriteriaAt = t; }
+
+    public boolean criteriaAcceptedByBoth() {
+        return clientAcceptedCriteriaAt != null && freelancerAcceptedCriteriaAt != null;
+    }
 }

@@ -44,6 +44,9 @@ public class FundingService {
         if (!Set.of(JobStatus.DRAFT, JobStatus.AWAITING_FUNDING).contains(job.getStatus())) {
             throw new IllegalStateException("Job is " + job.getStatus() + ", cannot create a funding order");
         }
+        if (!job.criteriaAcceptedByBoth()) {
+            throw new IllegalStateException("Client and freelancer must both accept the acceptance criteria before funding");
+        }
         PaymentAuthorization auth = authorizations.findByJobId(jobId)
                 .orElseGet(() -> authorizations.save(new PaymentAuthorization(job)));
 

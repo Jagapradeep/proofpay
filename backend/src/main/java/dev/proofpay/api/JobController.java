@@ -1,5 +1,7 @@
 package dev.proofpay.api;
 
+import dev.proofpay.ai.CriteriaService;
+import dev.proofpay.ai.VerificationService;
 import dev.proofpay.api.ApiDtos.*;
 import dev.proofpay.audit.AuditService;
 import dev.proofpay.domain.Job;
@@ -27,10 +29,14 @@ public class JobController {
     private final PaymentAuthorizationRepository authRepo;
     private final ReleaseRepository releaseRepo;
     private final AuditEventRepository auditRepo;
+    private final CriteriaService criteria;
+    private final VerificationService verification;
 
     public JobController(JobService jobs, FundingService funding, ReleaseService releases, JobRepository jobRepo,
                          PaymentAuthorizationRepository authRepo, ReleaseRepository releaseRepo,
-                         AuditEventRepository auditRepo) {
+                         AuditEventRepository auditRepo, CriteriaService criteria, VerificationService verification) {
+        this.criteria = criteria;
+        this.verification = verification;
         this.jobs = jobs;
         this.funding = funding;
         this.releases = releases;
@@ -65,6 +71,20 @@ public class JobController {
     @GetMapping("/jobs/{id}/audit")
     public List<AuditView> audit(@PathVariable UUID id) {
         return auditRepo.findByJobIdOrderByCreatedAtAsc(id).stream().map(AuditView::of).toList();
+    }
+
+    // ---- criteria (AI compiler; both sides accept before funding) ----
+
+    @PostMapping("/jobs/{id}/criteria")
+    public JobView compileCriteria(@PathVariable UUID id) {
+        criteria.compile(id);
+        return view(id);
+    }
+
+    @PostMapping("/jobs/{id}/criteria/accept")
+    public JobView acceptCriteria(@PathVariable UUID id, @Valid @RequestBody AcceptCriteriaRequest req) {
+        criteria.accept(id, req.party());
+        return view(id);
     }
 
     // ---- funding ----
@@ -102,6 +122,12 @@ public class JobController {
         var result = releases.propose(new ReleaseProposal(id, req.amount(), req.confidence(),
                 req.injectionFlagged(), req.evidence() == null ? List.of() : req.evidence()), AuditService.CLIENT);
         return new ProposeReleaseResponse(result.decision().approved(), result.decision().reasons(), result.releaseId());
+    }
+
+    /** Runs the verifier agent on the submitted repo; its proposal goes through the policy gate. */
+    @PostMapping("/milestones/{id}/verify")
+    public VerificationService.Report verify(@PathVariable UUID id) {
+        return verification.verify(id);
     }
 
     @PostMapping("/releases/{id}/retry-payout")
