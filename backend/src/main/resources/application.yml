@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: proofpay
+  config:
+    # Local dev: read secrets from the repo-root .env (never committed)
+    import: "optional:file:../.env[.properties],optional:file:.env[.properties]"
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/proofpay}
+    username: ${DB_USER:}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: ${PORT:8080}
+
+paypal:
+  base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
+  client-id: ${PAYPAL_CLIENT_ID:}
+  client-secret: ${PAYPAL_CLIENT_SECRET:}
+  platform-email: ${PAYPAL_PLATFORM_EMAIL:}
+  webhook-id: ${PAYPAL_WEBHOOK_ID:}
+  return-url: ${APP_BASE_URL:http://localhost:3000}/fund/return
+  cancel-url: ${APP_BASE_URL:http://localhost:3000}/fund/cancel
+
+proofpay:
+  # Backup for webhooks: how often to re-check pending captures and payouts
+  poll-interval-ms: 30000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
