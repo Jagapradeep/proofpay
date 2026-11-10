@@ -41,15 +41,38 @@ and exceptions inside our tools are never shown to the model.
 
 ## Run locally
 
-Requirements: Java 21+, Docker.
+Requirements: Java 21+, Node 22+, Docker.
 
 ```bash
-cp .env.example .env          # fill in your PayPal sandbox app credentials
+cp .env.example .env          # PayPal sandbox app credentials + OPENAI_API_KEY
 docker compose up -d          # Postgres 16
-cd backend && ./mvnw spring-boot:run
+cd backend && ./mvnw spring-boot:run          # API on http://localhost:8080
+
+cd frontend
+cp .env.example .env.local    # BACKEND_URL, PROOFPAY_API_KEY (same as backend, or empty), PAYPAL_CLIENT_ID
+npm ci && npm run dev         # web app on http://localhost:3000
 ```
 
-API on http://localhost:8080 (health: `/actuator/health`).
+### Demo walkthrough (web app)
+1. Header: **Viewing as Client**. *Post a job* → *Use the demo job* → *Create job*.
+2. *Generate criteria with AI*, then *Accept as client*; switch to **Freelancer** and *Accept as freelancer*.
+3. Back as **Client**: click the PayPal button and log in with the sandbox **buyer** account. $100 is now *held*.
+4. As **Freelancer**, milestone 1: click the *injected* demo repo → *Submit* → *Run AI verification* → blocked.
+5. Resubmit with the *good* demo repo → verified → partial capture + payout. Repeat for milestone 2.
+6. Open **Ledger** (AG Grid) to see captures and payouts; the job page shows the full audit trail.
+
+Demo deliverables: [good](https://github.com/Jagapradeep/proofpay-demo-good) ·
+[partial](https://github.com/Jagapradeep/proofpay-demo-partial) ·
+[injected](https://github.com/Jagapradeep/proofpay-demo-injected) (the instructions hide in an HTML comment that GitHub does not render).
+
+### API protection
+When `PROOFPAY_API_KEY` is set, every `/api/**` call needs the `X-Api-Key` header (PayPal webhooks are exempt and
+verified by signature). The browser never sees the key: it calls the Next.js server, which proxies to the API and
+adds it. The AI endpoints are rate limited (20/hour per IP, 120/hour overall by default).
+
+### Regression check
+`python scripts/api_regression.py http://localhost:8080` runs 38 API checks (validation, state guards, criteria
+locking, idempotent orders, gate blocks). Set `PROOFPAY_API_KEY` in the environment if the API needs it.
 
 ### Try the flow with curl
 
@@ -82,10 +105,23 @@ curl -X POST localhost:8080/api/milestones/<milestoneId>/propose-release -H 'Con
 curl localhost:8080/api/ledger
 ```
 
+## Deploy to Render
+
+`render.yaml` is a Blueprint for Postgres + the API (Docker) + the web app (Docker).
+1. Render dashboard → **Blueprints → New Blueprint Instance** → pick this repo.
+2. Fill the prompted values: PayPal sandbox `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` / `PAYPAL_PLATFORM_EMAIL`,
+   `OPENAI_API_KEY`, and the two URLs (`APP_BASE_URL` = the web app URL, `BACKEND_URL` = the API URL; you can set
+   them after the first deploy, when Render shows the URLs). `PROOFPAY_API_KEY` is generated and shared automatically.
+3. Optional: add a PayPal webhook pointing at `https://<api>/api/webhooks/paypal` and set `PAYPAL_WEBHOOK_ID`
+   (without it, a 30 s poller tracks captures and payouts).
+
+Free instances sleep after 15 minutes idle; the first request then takes about a minute.
+
 ## Tech
 Spring Boot 3.5, Java 21, PostgreSQL + Flyway, Spring `RestClient` for PayPal REST (cached OAuth token),
 LangChain4j 1.22 with OpenAI (`gpt-5-mini` by default; AI services, `@Tool`, strict JSON schema output).
-Coming next: Next.js + PayPal JS SDK + AG Grid ledger, Render deploy.
+Frontend: Next.js 16 (App Router), React 19, Tailwind 4, PayPal JS SDK via `@paypal/react-paypal-js`
+(`intent=authorize`), AG Grid Community 36 for the ledger. Hosting: Render (Docker).
 
 ## License
 [MIT](LICENSE)

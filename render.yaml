@@ -1,0 +1,75 @@
+# Render Blueprint: Postgres + Spring Boot API + Next.js web app.
+# Render dashboard > Blueprints > New Blueprint Instance > pick this repo.
+# Values marked sync: false are asked for during setup (see README "Deploy to Render").
+databases:
+  - name: proofpay-db
+    plan: free
+    region: oregon
+    databaseName: proofpay
+    user: proofpay
+
+services:
+  - type: web
+    name: proofpay-api
+    runtime: docker
+    plan: free
+    region: oregon
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase: { name: proofpay-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: proofpay-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: proofpay-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: proofpay-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: proofpay-db, property: password }
+      - key: PROOFPAY_API_KEY
+        generateValue: true
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_PLATFORM_EMAIL
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      # The web app's public URL, e.g. https://proofpay-web.onrender.com (PayPal return/cancel pages live there)
+      - key: APP_BASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+      - key: OPENAI_REASONING_EFFORT
+        value: low
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: JAVA_OPTS
+        value: "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1"
+
+  - type: web
+    name: proofpay-web
+    runtime: docker
+    plan: free
+    region: oregon
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # The API's public URL, e.g. https://proofpay-api.onrender.com
+      - key: BACKEND_URL
+        sync: false
+      - key: PROOFPAY_API_KEY
+        fromService: { type: web, name: proofpay-api, envVarKey: PROOFPAY_API_KEY }
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: DEMO_CLIENT_EMAIL
+        sync: false
+      - key: DEMO_FREELANCER_EMAIL
+        sync: false

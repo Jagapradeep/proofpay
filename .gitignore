@@ -37,3 +37,7 @@ build/
 *.log
 node_modules/
 .next/
+*.local
+.env.*.local
+frontend/next-env.d.ts
+*.tsbuildinfo
