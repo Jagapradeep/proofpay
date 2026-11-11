@@ -72,7 +72,7 @@ export default function LedgerPage() {
     const r = rows ?? [];
     const sum = (f: (x: LedgerRow) => boolean) => r.filter(f).reduce((s, x) => s + x.amount, 0);
     return {
-      released: sum((x) => x.status !== "CAPTURE_FAILED"),
+      released: sum((x) => ["CAPTURED", "PAYOUT_PENDING", "PAID", "PAYOUT_FAILED"].includes(x.status)),
       paid: sum((x) => x.status === "PAID"),
       inFlight: r.filter((x) => ["VERIFIED", "CAPTURE_PENDING", "CAPTURED", "PAYOUT_PENDING"].includes(x.status)).length,
       failed: r.filter((x) => x.status.endsWith("FAILED")).length,

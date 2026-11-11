@@ -16,7 +16,9 @@ public enum ReleaseStatus {
             case CAPTURE_PENDING -> Set.of(CAPTURED, CAPTURE_FAILED);
             case CAPTURED -> Set.of(PAYOUT_PENDING, PAYOUT_FAILED);
             case PAYOUT_PENDING -> Set.of(PAID, PAYOUT_FAILED);
-            case PAYOUT_FAILED -> Set.of(CAPTURED); // retry: back to "captured, not yet paid out"
+            // Retry: back to "captured, not yet paid out" for a NEW payout, or back to PAYOUT_PENDING when
+            // PayPal says the earlier payout is in fact still alive (never pay twice).
+            case PAYOUT_FAILED -> Set.of(CAPTURED, PAYOUT_PENDING);
             case PAID, CAPTURE_FAILED -> Set.of();
         };
     }

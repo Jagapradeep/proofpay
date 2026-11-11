@@ -30,6 +30,23 @@ class ApiKeyFilterTest {
     }
 
     @Test
+    void oddSpellingsOfAPathStillNeedTheKey() throws Exception {
+        ApiKeyFilter f = new ApiKeyFilter("s3cret", 20, 100);
+        for (String path : new String[] {"/api;x/jobs", "/api/webhooks/../jobs", "/api/webhooks/paypal;x/../../jobs",
+                "/api/webhooks/other", "//api/jobs", "/actuator/env", "/actuator/health/../env"}) {
+            assertThat(run(f, "GET", path, null, null).getStatus()).as(path).isEqualTo(401);
+        }
+    }
+
+    @Test
+    void pathParametersDoNotDodgeTheRateLimit() throws Exception {
+        ApiKeyFilter f = new ApiKeyFilter("k", 1, 10);
+        assertThat(run(f, "POST", "/api/milestones/abc/verify", "k", "1.1.1.1").getStatus()).isEqualTo(200);
+        assertThat(run(f, "POST", "/api/milestones/abc/verify;x=1", "k", "1.1.1.1").getStatus()).isEqualTo(429);
+        assertThat(run(f, "POST", "/api/milestones/abc;y/verify", "k", "1.1.1.1").getStatus()).isEqualTo(429);
+    }
+
+    @Test
     void emptyKeyMeansOpenForLocalDev() throws Exception {
         assertThat(run(new ApiKeyFilter("", 20, 100), "GET", "/api/jobs", null, null).getStatus()).isEqualTo(200);
     }

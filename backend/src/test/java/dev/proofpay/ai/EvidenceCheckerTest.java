@@ -58,4 +58,20 @@ class EvidenceCheckerTest {
     void tinyQuotesAreRejected() {
         assertThat(EvidenceChecker.verify("tempconv/core.py", "def", files)).isFalse();
     }
+
+    @Test
+    void readmeQuoteProvesOnlyDocumentationCriteria() {
+        var files = java.util.Map.of("README.md", "Supports Kelvin with an absolute-zero check.\n",
+                "core.py", "def c_to_f(c):\n    return c * 9 / 5 + 32\n");
+        var claim = new dev.proofpay.ai.VerifierTools.CriterionResult("M1-C1", true, 1.0,
+                java.util.List.of(new dev.proofpay.ai.VerifierTools.Evidence("README.md", "Supports Kelvin with an absolute-zero check.")), "ok");
+        var checker = new EvidenceChecker();
+
+        var behaviour = checker.check(java.util.List.of("M1-C1"), java.util.List.of(claim), files, java.util.Set.of());
+        assertThat(behaviour.allProven()).as("the payee's own sentence is not proof of behaviour").isFalse();
+        assertThat(behaviour.fakeQuotes()).isZero();
+
+        var docs = checker.check(java.util.List.of("M1-C1"), java.util.List.of(claim), files, java.util.Set.of("M1-C1"));
+        assertThat(docs.allProven()).isTrue();
+    }
 }

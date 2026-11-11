@@ -26,7 +26,10 @@ public final class ApiDtos {
             @NotBlank @Size(max = 200) String title,
             @NotNull @DecimalMin("1.00") @Digits(integer = 8, fraction = 2) BigDecimal amount) {}
 
-    public record SubmitRequest(@NotBlank @Pattern(regexp = "https://github\\.com/.+") String deliverableUrl) {}
+    public record SubmitRequest(@NotBlank @Size(max = 300)
+                                @Pattern(regexp = "https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?",
+                                        message = "must look like https://github.com/owner/repo")
+                                String deliverableUrl) {}
 
     /** Same shape the verifier agent's proposeRelease tool will send. */
     public record ProposeReleaseRequest(

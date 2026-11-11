@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 public class EvidenceChecker {
 
     static final int MIN_QUOTE_CHARS = 8;
-    private static final Pattern INVISIBLE = Pattern.compile("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\uFEFF]");
+    private static final Pattern INVISIBLE = InjectionScanner.INVISIBLE;
     private static final Pattern SPACE = Pattern.compile("\\s+");
 
     public record CheckedEvidence(String path, String quote, boolean verified) {}
@@ -33,6 +33,16 @@ public class EvidenceChecker {
      * @param criterionIds every criterion of the milestone; any the agent skipped counts as not passed
      */
     public Result check(List<String> criterionIds, List<CriterionResult> results, Map<String, String> files) {
+        return check(criterionIds, results, files, null);
+    }
+
+    /**
+     * @param docEvidenceAllowed criteria that are themselves about documentation (README, usage, licence).
+     *        For every other criterion a quote from a README or other prose file exists but proves nothing:
+     *        the payee wrote that sentence. null = no restriction.
+     */
+    public Result check(List<String> criterionIds, List<CriterionResult> results, Map<String, String> files,
+                        java.util.Set<String> docEvidenceAllowed) {
         List<CheckedCriterion> out = new ArrayList<>();
         List<String> unproven = new ArrayList<>();
         int fake = 0;
@@ -49,7 +59,10 @@ public class EvidenceChecker {
             for (Evidence e : r.evidence() == null ? List.<Evidence>of() : r.evidence()) {
                 if (e == null) continue;
                 boolean ok = verify(e.path(), e.quote(), files);
-                if (ok) anyVerified = true; else fake++;
+                if (!ok) fake++;
+                else if (docEvidenceAllowed == null || docEvidenceAllowed.contains(id) || !isDocumentation(e.path())) {
+                    anyVerified = true;
+                }
                 ev.add(new CheckedEvidence(e.path(), e.quote(), ok));
             }
             boolean proven = r.passed() && anyVerified;
@@ -64,6 +77,12 @@ public class EvidenceChecker {
         if (q.length() < MIN_QUOTE_CHARS) return false;
         String content = files.get(strip(path));
         return content != null && normalize(content).contains(q);
+    }
+
+    static boolean isDocumentation(String path) {
+        String name = strip(path).toLowerCase(java.util.Locale.ROOT);
+        name = name.substring(name.lastIndexOf('/') + 1);
+        return name.matches(".*\\.(md|markdown|rst|txt|adoc)") || name.matches("(readme|license|licence|changelog|notes).*");
     }
 
     static String normalize(String s) {

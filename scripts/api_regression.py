@@ -137,10 +137,12 @@ s, b = call("POST", f"/api/milestones/{m1}/verify")
 check("verify on unfunded job -> 409", s == 409, (s, b))
 s, b = call("POST", f"/api/milestones/{m1}/propose-release",
             {"amount": 40, "confidence": 0.95, "injectionFlagged": False, "evidence": []})
-check("manual propose on unfunded job -> gate blocks", s == 200 and b["approved"] is False and b["reasons"], (s, b))
+MANUAL = s != 403  # the endpoint is off unless the backend runs with MANUAL_RELEASE_ENABLED=true
+check("manual propose: disabled (403) or gate blocks an unfunded job",
+      s == 403 or (s == 200 and b["approved"] is False and b["reasons"]), (s, b))
 s, b = call("POST", f"/api/milestones/{m1}/propose-release",
             {"amount": 40, "confidence": 1.5, "injectionFlagged": False, "evidence": []})
-check("propose with confidence > 1 -> 400", s == 400, (s, b))
+check("propose with confidence > 1 -> rejected", s in (400, 403), (s, b))
 s, b = call("POST", f"/api/jobs/{jid}/void")
 check("void before authorization -> 409", s == 409, (s, b))
 
@@ -156,8 +158,8 @@ else:
     check("verify a PAID milestone -> 409", s == 409, (s, b))
     s, b = call("POST", f"/api/milestones/{pm}/propose-release",
                 {"amount": 40, "confidence": 0.99, "injectionFlagged": False, "evidence": []})
-    check("second release for a PAID milestone -> gate blocks", b["approved"] is False
-          and any("already has a release" in r for r in b["reasons"]), b)
+    check("second release for a PAID milestone -> disabled or gate blocks", s == 403 or (b["approved"] is False
+          and any("already has a release" in r for r in b["reasons"])), (s, b))
     s, b = call("POST", f"/api/jobs/{done[-1]['id']}/void")
     check("void a fully captured job -> rejected", s in (409, 502), (s, b))
     rep = json.loads(done[-1]["milestones"][0]["verificationJson"] or "{}")

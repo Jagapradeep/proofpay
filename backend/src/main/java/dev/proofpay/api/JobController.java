@@ -31,10 +31,14 @@ public class JobController {
     private final AuditEventRepository auditRepo;
     private final CriteriaService criteria;
     private final VerificationService verification;
+    private final boolean manualRelease;
 
-    public JobController(JobService jobs, FundingService funding, ReleaseService releases, JobRepository jobRepo,
+    public JobController(@org.springframework.beans.factory.annotation.Value("${proofpay.manual-release-enabled:false}")
+                         boolean manualRelease,
+                         JobService jobs, FundingService funding, ReleaseService releases, JobRepository jobRepo,
                          PaymentAuthorizationRepository authRepo, ReleaseRepository releaseRepo,
                          AuditEventRepository auditRepo, CriteriaService criteria, VerificationService verification) {
+        this.manualRelease = manualRelease;
         this.criteria = criteria;
         this.verification = verification;
         this.jobs = jobs;
@@ -114,11 +118,16 @@ public class JobController {
     }
 
     /**
-     * Manual stand-in for the verifier agent's proposeRelease tool (and later the human-review approve
-     * button). It goes through the same policy gate, so it can't bypass any rule.
+     * Developer/test stand-in for the verifier agent's proposeRelease tool. It goes through the same policy
+     * gate, but the CALLER states the confidence and the injection flag, so without real client login it would
+     * let anyone skip the AI check. OFF unless MANUAL_RELEASE_ENABLED=true (never on a hosted instance).
      */
     @PostMapping("/milestones/{id}/propose-release")
     public ProposeReleaseResponse propose(@PathVariable UUID id, @Valid @RequestBody ProposeReleaseRequest req) {
+        if (!manualRelease) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Manual release is disabled: releases come only from the verifier agent through the policy gate");
+        }
         var result = releases.propose(new ReleaseProposal(id, req.amount(), req.confidence(),
                 req.injectionFlagged(), req.evidence() == null ? List.of() : req.evidence()), AuditService.CLIENT);
         return new ProposeReleaseResponse(result.decision().approved(), result.decision().reasons(), result.releaseId());

@@ -55,9 +55,9 @@ class ReleaseServiceTest {
             store.put(r.getId(), r);
             return r;
         });
-        when(releases.findById(any())).thenAnswer(inv -> Optional.ofNullable(store.get(inv.<UUID>getArgument(0))));
-        when(releases.findByMilestoneId(any())).thenAnswer(inv -> store.values().stream()
-                .filter(r -> r.getMilestone().getId().equals(inv.getArgument(0))).findFirst());
+        when(releases.findForUpdate(any())).thenAnswer(inv -> Optional.ofNullable(store.get(inv.<UUID>getArgument(0))));
+        when(releases.existsByMilestoneIdAndStatusNot(any(), any())).thenAnswer(inv -> store.values().stream()
+                .anyMatch(r -> r.getMilestone().getId().equals(inv.getArgument(0)) && r.getStatus() != inv.getArgument(1)));
 
         job = fundedJob("dev@personal.example.com", "40.00", "60.00");
         m1 = job.getMilestones().get(0);
@@ -316,5 +316,75 @@ class ReleaseServiceTest {
         service.advance(r.getId()); // a late webhook or poll
 
         verifyNoInteractions(paypal);
+    }
+
+    @Test
+    void retryNeverSendsASecondPayoutWhileTheFirstIsStillAliveAtPayPal() {
+        captureSucceeds("40.00", "PARTIALLY_CAPTURED");
+        payoutAccepted();
+        payoutStatus("DENIED", "FAILED", "RECEIVER_UNREGISTERED");
+        service.propose(good(m1, "40.00"), AuditService.AGENT);
+        Release r = only();
+        UUID firstPayoutId = r.getPayoutRequestId();
+        assertThat(r.getStatus()).isEqualTo(ReleaseStatus.PAYOUT_FAILED);
+
+        // Our record says "failed", but PayPal now reports that same batch as paid (stale or raced record).
+        reset(paypal);
+        payoutStatus("SUCCESS", "SUCCESS", null);
+        service.retryPayout(r.getId());
+
+        assertThat(r.getStatus()).isEqualTo(ReleaseStatus.PAID);
+        assertThat(r.getPayoutRequestId()).isEqualTo(firstPayoutId);
+        verify(paypal, never()).createPayout(any(), any(), any(), any());
+    }
+
+    @Test
+    void retryIsRefusedUnlessThePayoutFailed() {
+        captureSucceeds("40.00", "PARTIALLY_CAPTURED");
+        payoutAccepted();
+        payoutStatus("SUCCESS", "SUCCESS", null);
+        service.propose(good(m1, "40.00"), AuditService.AGENT);
+        Release r = only();
+        assertThat(r.getStatus()).isEqualTo(ReleaseStatus.PAID);
+
+        clearInvocations(paypal);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.retryPayout(r.getId()))
+                .isInstanceOf(IllegalStateException.class);
+        verify(paypal, never()).createPayout(any(), any(), any(), any());
+    }
+
+    @Test
+    void rateLimitOrExpiredTokenIsNotTreatedAsAFailedPayout() {
+        captureSucceeds("40.00", "PARTIALLY_CAPTURED");
+        when(paypal.createPayout(any(), any(), any(), any()))
+                .thenThrow(new PayPalApiException(429, "RATE_LIMIT_REACHED", "d", "{}"));
+
+        service.propose(good(m1, "40.00"), AuditService.AGENT);
+
+        Release r = only();
+        assertThat(r.getStatus()).as("left for the poller to retry with the same id").isEqualTo(ReleaseStatus.CAPTURED);
+        assertThat(r.getFailureReason()).isNull();
+    }
+
+    @Test
+    void failedCaptureReopensTheMilestoneAndAllowsANewRelease() {
+        when(paypal.captureAuthorization(any(), any(), any(), anyBoolean(), any()))
+                .thenThrow(new PayPalApiException(422, "AUTHORIZATION_VOIDED", "d", "{}"));
+        service.propose(good(m1, "40.00"), AuditService.AGENT);
+        Release failed = only();
+        assertThat(failed.getStatus()).isEqualTo(ReleaseStatus.CAPTURE_FAILED);
+        assertThat(m1.getStatus()).as("not stuck in RELEASING").isEqualTo(MilestoneStatus.NEEDS_REVIEW);
+        assertThat(auth.getCapturedAmount()).isEqualByComparingTo("0.00");
+
+        m1.setStatus(MilestoneStatus.SUBMITTED); // the freelancer resubmits
+        reset(paypal);
+        captureSucceeds("40.00", "PARTIALLY_CAPTURED");
+        payoutAccepted();
+        payoutStatus("SUCCESS", "SUCCESS", null);
+        var second = service.propose(good(m1, "40.00"), AuditService.AGENT);
+
+        assertThat(second.decision().approved()).isTrue();
+        assertThat(store).hasSize(2);
+        assertThat(store.get(second.releaseId()).getCaptureRequestId()).isNotEqualTo(failed.getCaptureRequestId());
     }
 }

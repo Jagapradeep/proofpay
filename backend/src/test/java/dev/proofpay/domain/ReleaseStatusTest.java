@@ -20,6 +20,8 @@ class ReleaseStatusTest {
         assertThat(CAPTURE_PENDING.canMoveTo(CAPTURED)).isTrue();
         assertThat(PAYOUT_PENDING.canMoveTo(PAYOUT_FAILED)).isTrue();
         assertThat(PAYOUT_FAILED.canMoveTo(CAPTURED)).isTrue();
+        assertThat(PAYOUT_FAILED.canMoveTo(PAYOUT_PENDING)).isTrue(); // re-check: PayPal says the payout is still live
+        assertThat(PAYOUT_FAILED.canMoveTo(PAID)).isFalse();
     }
 
     @Test

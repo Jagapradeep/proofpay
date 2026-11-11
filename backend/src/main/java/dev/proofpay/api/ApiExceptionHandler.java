@@ -43,6 +43,12 @@ public class ApiExceptionHandler {
         return error(HttpStatus.BAD_GATEWAY, e.getMessage());
     }
 
+    /** Network trouble reaching PayPal, GitHub or OpenAI: say so instead of a bare 500. */
+    @ExceptionHandler(org.springframework.web.client.ResourceAccessException.class)
+    ResponseEntity<ApiError> upstream(org.springframework.web.client.ResourceAccessException e) {
+        return error(HttpStatus.BAD_GATEWAY, "An outside service (PayPal, GitHub or OpenAI) did not answer; please try again");
+    }
+
     @ExceptionHandler(AiUnavailableException.class)
     ResponseEntity<ApiError> ai(AiUnavailableException e) {
         return error(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());

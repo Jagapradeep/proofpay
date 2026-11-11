@@ -18,7 +18,8 @@ public class Release extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     private Job job;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    /** At most one release per milestone that is not CAPTURE_FAILED (partial unique index, V4). */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     private Milestone milestone;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

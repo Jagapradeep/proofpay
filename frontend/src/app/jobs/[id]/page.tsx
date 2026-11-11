@@ -88,7 +88,11 @@ export default function JobPage() {
           </p>
         </div>
         {job.status !== "FUNDED" && job.status !== "COMPLETED" && (
-          <p className="card p-4 text-sm text-muted">Milestones open once the job is funded.</p>
+          <p className="card p-4 text-sm text-muted">
+            {job.status === "CANCELLED"
+              ? "This job was cancelled and the PayPal hold was released. Nothing more can be submitted or paid."
+              : "Milestones open once the job is funded."}
+          </p>
         )}
         {job.milestones.map((m) => (
           <MilestoneCard key={m.id} job={job} milestone={m} onChange={load}

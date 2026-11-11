@@ -34,6 +34,8 @@ proofpay:
   ai-rate-limit:
     per-ip: ${AI_RATE_LIMIT_PER_IP:20}
     global: ${AI_RATE_LIMIT_GLOBAL:120}
+  # Dev/test only: POST /api/milestones/{id}/propose-release (caller-stated confidence). Keep false when hosted.
+  manual-release-enabled: ${MANUAL_RELEASE_ENABLED:false}
   # Backup for webhooks: how often to re-check pending captures and payouts
   poll-interval-ms: 30000
   ai:

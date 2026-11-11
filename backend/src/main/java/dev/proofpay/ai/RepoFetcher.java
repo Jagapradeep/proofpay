@@ -3,6 +3,7 @@ package dev.proofpay.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriUtils;
@@ -36,6 +37,8 @@ public class RepoFetcher {
 
     private final RestClient api;
     private final RestClient raw;
+    /** After the raw host failed, files go straight to the API for 5 minutes instead of failing one by one. */
+    private volatile long rawHostDownUntil;
 
     public RepoFetcher(RestClient.Builder builder, AiProperties props) {
         RestClient.Builder b = builder.clone()
@@ -49,7 +52,20 @@ public class RepoFetcher {
         this.raw = builder.clone().defaultHeader(HttpHeaders.USER_AGENT, "ProofPay-Verifier").build();
     }
 
+    /** One retry on a network hiccup (e.g. a pooled connection GitHub already closed), then a clear error. */
     public RepoSnapshot fetch(String url) {
+        try {
+            return fetchOnce(url);
+        } catch (ResourceAccessException first) {
+            try {
+                return fetchOnce(url);
+            } catch (ResourceAccessException second) {
+                throw new IllegalStateException("Could not reach GitHub to read the repository; please try again", second);
+            }
+        }
+    }
+
+    private RepoSnapshot fetchOnce(String url) {
         Matcher m = GITHUB_URL.matcher(url == null ? "" : url.strip());
         if (!m.matches()) {
             throw new IllegalArgumentException("Expected https://github.com/<owner>/<repo>, got: " + url);
@@ -108,7 +124,19 @@ public class RepoFetcher {
             encoded.append(UriUtils.encodePathSegment(seg, StandardCharsets.UTF_8));
         }
         URI uri = URI.create("https://raw.githubusercontent.com/" + owner + "/" + repo + "/" + sha + "/" + encoded);
-        byte[] bytes = raw.get().uri(uri).retrieve().body(byte[].class);
+        byte[] bytes;
+        try {
+            if (System.currentTimeMillis() < rawHostDownUntil) throw new ResourceAccessException("raw host skipped");
+            bytes = raw.get().uri(uri).retrieve().body(byte[].class);
+        } catch (ResourceAccessException e) {
+            // Some networks cannot reach raw.githubusercontent.com. Same file, same pinned commit, via the API
+            // (slower and counted against the API rate limit, so only as a fallback).
+            rawHostDownUntil = System.currentTimeMillis() + 300_000;
+            bytes = api.get().uri(URI.create("https://api.github.com/repos/" + owner + "/" + repo + "/contents/"
+                            + encoded + "?ref=" + sha))
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github.raw+json")
+                    .retrieve().body(byte[].class);
+        }
         return bytes == null ? "" : new String(bytes, StandardCharsets.UTF_8);
     }
 

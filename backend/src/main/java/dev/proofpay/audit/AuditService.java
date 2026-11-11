@@ -28,6 +28,11 @@ public class AuditService {
         this.json = json;
     }
 
+    /** How many events of one type a milestone has (e.g. how many agent verdicts it already got). */
+    public long count(UUID milestoneId, String type) {
+        return repo.countByMilestoneIdAndType(milestoneId, type);
+    }
+
     public void record(UUID jobId, UUID milestoneId, UUID releaseId, String type, String actor, Map<String, ?> detail) {
         try {
             repo.save(new AuditEvent(jobId, milestoneId, releaseId, type, actor,

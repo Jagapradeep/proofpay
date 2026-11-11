@@ -37,6 +37,8 @@ public class ReleaseService {
     private static final Set<String> PAYOUT_ITEM_FAILED =
             Set.of("FAILED", "RETURNED", "BLOCKED", "REFUNDED", "REVERSED", "DENIED");
 
+    private static final Set<Integer> TRANSIENT_4XX = Set.of(401, 408, 425, 429);
+
     private final ReleaseRepository releases;
     private final MilestoneRepository milestones;
     private final PaymentAuthorizationRepository authorizations;
@@ -71,7 +73,7 @@ public class ReleaseService {
                     .orElseThrow(() -> new NoSuchElementException("Milestone not found: " + p.milestoneId()));
             Job job = m.getJob();
             PaymentAuthorization auth = authorizations.findByJobId(job.getId()).orElse(null);
-            boolean exists = releases.findByMilestoneId(m.getId()).isPresent();
+            boolean exists = releases.existsByMilestoneIdAndStatusNot(m.getId(), ReleaseStatus.CAPTURE_FAILED);
 
             PolicyGate.Decision d = gate.evaluate(p, m, auth, exists);
             Map<String, Object> detail = new LinkedHashMap<>();
@@ -111,11 +113,28 @@ public class ReleaseService {
     public void retryPayout(UUID releaseId) {
         tx.executeWithoutResult(s -> {
             Release r = load(releaseId);
+            if (r.getStatus() != ReleaseStatus.PAYOUT_FAILED) {
+                throw new IllegalStateException("Release is " + r.getStatus() + "; only a failed payout can be retried");
+            }
+            // Never send a second payout on our own record alone: ask PayPal what became of the first one.
+            if (r.getPaypalPayoutBatchId() != null && !payoutDefinitelyFailed(paypal.getPayoutBatch(r.getPaypalPayoutBatchId()))) {
+                r.moveTo(ReleaseStatus.PAYOUT_PENDING);
+                r.setFailureReason(null);
+                auditRelease(r, "PAYOUT_RECHECK", AuditService.SYSTEM,
+                        Map.of("payoutBatchId", r.getPaypalPayoutBatchId(), "note", "earlier payout is still live at PayPal; no new payout sent"));
+                return;
+            }
             r.moveTo(ReleaseStatus.CAPTURED);
             r.newPayoutAttempt();
             audit.record(r.getJob().getId(), r.getMilestone().getId(), r.getId(), "PAYOUT_RETRY", AuditService.SYSTEM, null);
         });
         advance(releaseId);
+    }
+
+    private static boolean payoutDefinitelyFailed(PayoutBatch batch) {
+        PayoutItemDetails item = batch.firstItem();
+        String itemStatus = item == null ? null : item.transactionStatus();
+        return PAYOUT_ITEM_FAILED.contains(itemStatus) || "DENIED".equals(batch.batchHeader().batchStatus());
     }
 
     public void onCaptureEvent(String captureId) {
@@ -140,8 +159,9 @@ public class ReleaseService {
                 default -> false;
             };
         } catch (PayPalApiException e) {
-            if (e.status() >= 500) {
-                // Transient: leave the state alone; the poller retries with the same request id.
+            if (e.status() >= 500 || TRANSIENT_4XX.contains(e.status())) {
+                // Transient (PayPal down, expired token, rate limit): leave the state alone; the poller
+                // retries with the same request id. Calling this a failure could lead to a second payout.
                 log.warn("PayPal {} on release {}, will retry: {}", e.status(), releaseId, e.getMessage());
                 return false;
             }
@@ -172,14 +192,15 @@ public class ReleaseService {
         }
 
         r.setPaypalCaptureId(confirmed.id());
-        auth.setCapturedAmount(auth.getCapturedAmount().add(r.getAmount()));
-        syncAuthorizationStatus(auth);
-
         ReleaseStatus next = switch (confirmed.status()) {
             case "COMPLETED" -> ReleaseStatus.CAPTURED;
             case "PENDING" -> ReleaseStatus.CAPTURE_PENDING;
             default -> ReleaseStatus.CAPTURE_FAILED;
         };
+        if (next != ReleaseStatus.CAPTURE_FAILED) { // a declined capture took nothing from the hold
+            auth.setCapturedAmount(auth.getCapturedAmount().add(r.getAmount()));
+        }
+        syncAuthorizationStatus(auth);
         r.moveTo(next);
         auditRelease(r, "CAPTURE_" + confirmed.status(), AuditService.PAYPAL,
                 Map.of("captureId", confirmed.id(), "amount", r.getAmount(), "authorizationStatus", auth.getStatus()));
@@ -194,6 +215,8 @@ public class ReleaseService {
             return true;
         }
         if ("DECLINED".equals(c.status()) || "FAILED".equals(c.status())) {
+            PaymentAuthorization auth = r.getAuthorization(); // it was counted while pending; give it back
+            auth.setCapturedAmount(auth.getCapturedAmount().subtract(r.getAmount()).max(java.math.BigDecimal.ZERO));
             fail(r, "CAPTURE_" + c.status());
         }
         return false;
@@ -242,6 +265,10 @@ public class ReleaseService {
         };
         r.moveTo(target);
         r.setFailureReason(reason);
+        if (target == ReleaseStatus.CAPTURE_FAILED && r.getMilestone().getStatus() == MilestoneStatus.RELEASING) {
+            // Nothing was taken from the hold: reopen the milestone instead of leaving it stuck in RELEASING.
+            r.getMilestone().setStatus(MilestoneStatus.NEEDS_REVIEW);
+        }
         auditRelease(r, target.name(), AuditService.PAYPAL, Map.of("reason", reason));
         log.warn("Release {} -> {}: {}", r.getId(), target, reason);
     }
@@ -269,8 +296,9 @@ public class ReleaseService {
         audit.record(r.getJob().getId(), r.getMilestone().getId(), r.getId(), type, actor, detail);
     }
 
+    /** Always with a row lock: see {@link ReleaseRepository#findForUpdate}. */
     private Release load(UUID id) {
-        return releases.findById(id).orElseThrow(() -> new NoSuchElementException("Release not found: " + id));
+        return releases.findForUpdate(id).orElseThrow(() -> new NoSuchElementException("Release not found: " + id));
     }
 
     private static Money money(Release r) {

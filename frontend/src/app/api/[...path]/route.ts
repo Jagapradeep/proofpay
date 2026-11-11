@@ -6,15 +6,24 @@ export const dynamic = "force-dynamic";
 const BACKEND = (process.env.BACKEND_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const SAFE_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
+// The caller's address for the backend's per-IP rate limit. The FIRST X-Forwarded-For entry is whatever the
+// caller typed, so it is never used. Cloudflare (in front of Render) overwrites CF-Connecting-IP / True-Client-IP
+// with the real address; failing those, the LAST X-Forwarded-For entry is the one our own edge appended.
+function clientIp(req: NextRequest): string {
+  const edge = req.headers.get("cf-connecting-ip") ?? req.headers.get("true-client-ip");
+  if (edge && /^[0-9a-fA-F:.]{3,45}$/.test(edge.trim())) return edge.trim();
+  const last = req.headers.get("x-forwarded-for")?.split(",").pop()?.trim();
+  return last && /^[0-9a-fA-F:.]{3,45}$/.test(last) ? last : "unknown";
+}
+
 async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
-  // Webhooks go straight from PayPal to the backend, never through here.
-  if (path[0] === "webhooks" || !path.every((p) => SAFE_SEGMENT.test(p))) {
+  // Webhooks go straight from PayPal to the backend, never through here. The manual-release test endpoint is
+  // never reachable from a browser (the backend also keeps it switched off).
+  if (path[0] === "webhooks" || path.includes("propose-release") || !path.every((p) => SAFE_SEGMENT.test(p))) {
     return Response.json({ status: 404, error: "Not Found", message: "Unknown API path" }, { status: 404 });
   }
-  const headers: Record<string, string> = {
-    "X-Forwarded-For": req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
-  };
+  const headers: Record<string, string> = { "X-Forwarded-For": clientIp(req) };
   const key = process.env.PROOFPAY_API_KEY;
   if (key) headers["X-Api-Key"] = key;
   const contentType = req.headers.get("content-type");

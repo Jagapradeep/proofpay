@@ -23,7 +23,9 @@ import java.util.regex.Pattern;
 
 /**
  * Demo-grade API protection:
- * 1. Every /api/** call needs the X-Api-Key header (PayPal webhooks are exempt; they are verified by signature).
+ * 1. Every request needs the X-Api-Key header, except an exact allow-list: the PayPal webhook (verified by
+ *    signature) and the health check. Deny by default: a path we do not recognise character for character
+ *    needs the key, so odd spellings like /api;x/jobs cannot slip past the filter and still reach a controller.
  *    The Next.js server adds the key, so it never reaches the browser. Empty key = open (local dev only).
  * 2. The LLM endpoints (criteria, verify) are rate limited per client IP and globally, to protect AI credits.
  */
@@ -36,6 +38,10 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     private static final Pattern AI_ENDPOINT =
             Pattern.compile("^/api/(jobs/[^/]+/criteria|milestones/[^/]+/verify)$");
     static final Duration WINDOW = Duration.ofHours(1);
+    private static final java.util.Set<String> OPEN_PATHS =
+            java.util.Set.of("/api/webhooks/paypal", "/actuator/health", "/actuator/info");
+    /** ";name=value" path parameters: Spring ignores them when it picks a controller, so we must too. */
+    private static final Pattern PATH_PARAMS = Pattern.compile(";[^/]*");
 
     private final byte[] key;
     private final int perIpLimit;
@@ -53,8 +59,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
-        String path = req.getRequestURI();
-        return !path.startsWith("/api/") || path.startsWith("/api/webhooks/");
+        return OPEN_PATHS.contains(req.getRequestURI());
     }
 
     @Override
@@ -67,7 +72,8 @@ public class ApiKeyFilter extends OncePerRequestFilter {
                 return;
             }
         }
-        if ("POST".equals(req.getMethod()) && AI_ENDPOINT.matcher(req.getRequestURI()).matches()) {
+        String path = PATH_PARAMS.matcher(req.getRequestURI()).replaceAll("").replaceAll("/+$", "");
+        if ("POST".equals(req.getMethod()) && AI_ENDPOINT.matcher(path).matches()) {
             String ip = clientIp(req);
             if (!allow("ip:" + ip, perIpLimit) || !allow("global", globalLimit)) {
                 reject(res, 429, "Too Many Requests", "AI rate limit reached; try again later");

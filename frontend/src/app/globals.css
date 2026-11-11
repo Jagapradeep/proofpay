@@ -24,6 +24,25 @@ body {
   color: var(--color-ink);
 }
 
+/* Tailwind 4 no longer gives buttons a hand cursor; restore it for everything clickable. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="radio"],
+  a[href],
+  summary,
+  select,
+  label[for],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
 @layer components {
 .card {
   @apply rounded-xl border border-line bg-white shadow-sm;

@@ -44,14 +44,14 @@ export function VerificationReportView({ report, currency }: { report: Verificat
       {report.scannerFindings.length > 0 && (
         <div className="rounded-lg border border-red-200 bg-white">
           <div className="border-b border-red-100 bg-bad-soft px-4 py-2 text-sm font-semibold text-bad">
-            Injection scanner (plain regex, not AI) found {report.scannerFindings.length} suspicious line(s)
+            Injection scanner (plain regex, not AI) found {report.scannerFindings.length} suspicious spot(s)
             {report.agentInjectionSuspected && " · the AI agent flagged it too"}
           </div>
           <ul className="divide-y divide-line">
             {report.scannerFindings.map((f, i) => (
               <li key={i} className="px-4 py-2 text-sm">
                 <span className="mr-2 rounded bg-bad-soft px-1.5 py-0.5 font-mono text-xs text-bad">{label(f.rule)}</span>
-                <span className="font-mono text-xs text-muted">{f.path}:{f.line}</span>
+                <span className="font-mono text-xs text-muted">{f.line > 0 ? `${f.path}:${f.line}` : "file name"}</span>
                 <div className="mt-1 font-mono text-xs text-ink">&ldquo;{f.snippet}&rdquo;</div>
               </li>
             ))}

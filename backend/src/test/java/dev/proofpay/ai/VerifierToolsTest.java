@@ -86,8 +86,9 @@ class VerifierToolsTest {
         assertThat(last).filteredOn(ToolExecutionResultMessage.class::isInstance)
                 .map(m -> ((ToolExecutionResultMessage) m).text())
                 .singleElement().satisfies(t -> assertThat(t)
-                        .contains("<<<UNTRUSTED FILE README.md>>>")
-                        .contains("<<<UNTRUSTED FILE tempconv/core.py>>>"));
+                        .containsPattern("<<<UNTRUSTED FILE [0-9a-f]{16} README\\.md>>>")
+                        .containsPattern("<<<UNTRUSTED FILE [0-9a-f]{16} tempconv/core\\.py>>>")
+                        .contains("<<<END UNTRUSTED FILE " + tools.boundary() + ">>>"));
     }
 
     @Test

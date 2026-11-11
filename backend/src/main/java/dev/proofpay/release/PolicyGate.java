@@ -37,7 +37,7 @@ public class PolicyGate {
         if (p.injectionFlagged()) {
             reasons.add("Prompt injection detected in the deliverable");
         }
-        if (p.confidence() < MIN_CONFIDENCE) {
+        if (!(p.confidence() >= MIN_CONFIDENCE)) { // written this way so NaN fails too
             reasons.add("Confidence " + p.confidence() + " is below " + MIN_CONFIDENCE);
         }
         if (milestone.getStatus() != MilestoneStatus.SUBMITTED) {

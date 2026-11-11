@@ -34,6 +34,11 @@ public class VerifierTools {
 
     private final RepoSnapshot repo;
     private final Function<Verdict, String> onVerdict;
+    /**
+     * Random per run and unknown to whoever wrote the repo, so file text cannot fake an "end of file"
+     * marker and pretend that what follows comes from the system.
+     */
+    private final String boundary = Long.toHexString(new java.security.SecureRandom().nextLong() | Long.MIN_VALUE);
     private final Set<String> filesRead = new LinkedHashSet<>();
     private Verdict verdict;
     private String verdictReply;
@@ -47,7 +52,7 @@ public class VerifierTools {
     public String listFiles() {
         StringBuilder sb = new StringBuilder();
         for (String p : repo.allPaths()) {
-            sb.append(p);
+            sb.append(printable(p));
             if (!repo.files().containsKey(p)) sb.append("  [not fetched]");
             sb.append('\n');
         }
@@ -67,7 +72,16 @@ public class VerifierTools {
         filesRead.add(key);
         String body = content.length() > MAX_READ_CHARS
                 ? content.substring(0, MAX_READ_CHARS) + "\n[truncated]" : content;
-        return "<<<UNTRUSTED FILE " + key + ">>>\n" + body + "\n<<<END UNTRUSTED FILE " + key + ">>>";
+        return "<<<UNTRUSTED FILE " + boundary + " " + printable(key) + ">>>\n" + body
+                + "\n<<<END UNTRUSTED FILE " + boundary + ">>>";
+    }
+
+    /** The marker token the brief tells the agent about. */
+    public String boundary() { return boundary; }
+
+    /** File names are untrusted too: no line breaks or marker characters when we print one. */
+    static String printable(String path) {
+        return path.replaceAll("[\\p{Cntrl}<>]", "?");
     }
 
     @Tool("Read several files from the submitted repository in ONE call (preferred over readFile: every extra "
