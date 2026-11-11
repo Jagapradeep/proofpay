@@ -1,5 +1,7 @@
 # ProofPay
 
+<img src="frontend/src/app/icon.svg" alt="ProofPay logo" width="64" height="64">
+
 AI escrow that pays on proof. A client funds a job through PayPal (held, not charged), an AI
 verifier checks the freelancer's deliverable against agreed criteria, and a deterministic policy
 gate decides whether money moves. **The LLM proposes, code disposes.**
@@ -24,7 +26,7 @@ Release states: `VERIFIED → CAPTURED → PAYOUT_PENDING → PAID | PAYOUT_FAIL
 |---|---|---|
 | Criteria compiler | LangChain4j AI service turns the plain-English job into 2-4 testable criteria per milestone (structured JSON output). Client **and** freelancer accept them before funding. | LLM drafts, both people accept |
 | Injection scan | Regex pre-pass over every fetched file: "ignore previous instructions", text addressed to an AI reviewer, payment directives, hidden HTML comments, zero-width characters. | Code |
-| Verifier agent | Reads the repo (pinned to one commit) through `listFiles` / `readFile` tools, scores each criterion with verbatim evidence quotes, then calls `proposeRelease`. File content is wrapped as untrusted data. | LLM proposes |
+| Verifier agent | Gets the README up front, reads the rest of the repo (pinned to one commit) in one `readFiles` call, scores each criterion with verbatim evidence quotes, then calls `proposeRelease`, which ends the run. File content is wrapped as untrusted data. | LLM proposes |
 | Evidence check | Every quote must appear word for word in the file it names; a "passed" criterion without one is unproven and confidence is capped at 0.5. | Code |
 | Policy gate | Same gate as below; injection flag = scanner OR agent. | Code disposes |
 
@@ -74,7 +76,8 @@ The key is any long random string, and the **same value** goes in `.env` (backen
 app). Leave both empty on localhost (API open). On Render it is generated and shared between the services for you.
 
 ### AI cost
-- Default model `gpt-5-mini` with `OPENAI_REASONING_EFFORT=minimal`: about 10 s per verification, and correct on all
+- Default model `gpt-5-mini` with `OPENAI_REASONING_EFFORT=minimal`: the agent takes 7 to 10 s (15 to 30 s for a
+  whole verification including GitHub and PayPal), and is correct on all
   three demo repos. (`gpt-5-nano` was tested and is not reliable enough for the verifier.)
 - **Answer cache** (`ai_cache` table): the same job text gives the same criteria, and the same repo commit with the
   same criteria and model gives the same verdict, without calling OpenAI again. Only the model's answer is reused:
@@ -83,7 +86,7 @@ app). Leave both empty on localhost (API open). On Render it is generated and sh
 - Set a monthly budget on your OpenAI project as a hard ceiling.
 
 ### Tests
-- `cd backend && ./mvnw test`: 56 unit tests (policy gate, state machine, PayPal client contracts, injection
+- `cd backend && ./mvnw test`: 57 unit tests (policy gate, state machine, PayPal client contracts, injection
   scanner, evidence checker, the real LangChain4j tool loop with a scripted model, API key filter, AI cache).
   No network, no OpenAI cost.
 - `python scripts/api_regression.py http://localhost:8080`: 38 API checks against a running backend
@@ -114,7 +117,7 @@ curl -X POST localhost:8080/api/jobs/<jobId>/authorize
 # 5. Freelancer submits; the verifier agent checks it and proposes a release to the policy gate
 curl -X POST localhost:8080/api/milestones/<milestoneId>/submit -H 'Content-Type: application/json' \
   -d '{"deliverableUrl": "https://github.com/Jagapradeep/proofpay-demo-good"}'
-curl -X POST localhost:8080/api/milestones/<milestoneId>/verify     # ~10 s; returns the full report
+curl -X POST localhost:8080/api/milestones/<milestoneId>/verify     # 15-30 s; returns the full report
 
 # (Human-review stand-in for the agent: goes through the same gate)
 curl -X POST localhost:8080/api/milestones/<milestoneId>/propose-release -H 'Content-Type: application/json' \
