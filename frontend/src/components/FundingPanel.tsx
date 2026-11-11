@@ -12,6 +12,9 @@ export function FundingPanel({ job, onChange }: { job: Job; onChange: () => Prom
   const { role, config } = useApp();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Shown after the PayPal window is closed or fails: usually the browser is still signed in to PayPal as the
+  // platform (business) account, and PayPal refuses "pay yourself" with no way to switch account in the window.
+  const [showAccountHelp, setShowAccountHelp] = useState(false);
 
   const accepted = !!job.clientAcceptedCriteriaAt && !!job.freelancerAcceptedCriteriaAt;
   const canFund = accepted && (job.status === "DRAFT" || job.status === "AWAITING_FUNDING");
@@ -90,7 +93,11 @@ export function FundingPanel({ job, onChange }: { job: Job; onChange: () => Prom
                     setBusy(false);
                   }
                 }}
-                onError={(e) => setError(`PayPal: ${String(e)}`)}
+                onCancel={() => setShowAccountHelp(true)}
+                onError={(e) => {
+                  setError(`PayPal: ${String(e)}`);
+                  setShowAccountHelp(true);
+                }}
               />
             </PayPalScriptProvider>
           ) : (
@@ -101,6 +108,15 @@ export function FundingPanel({ job, onChange }: { job: Job; onChange: () => Prom
             Button not loading? Continue on paypal.com instead
           </button>
           <p className="mt-3 text-xs text-muted">Sandbox: log in with the sandbox <b>buyer</b> account. Total {money(job.totalAmount, job.currency)}.</p>
+          {showAccountHelp && (
+            <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+              Did PayPal say you can&apos;t pay yourself? Your browser is signed in to PayPal with the business account.{" "}
+              <a href="https://www.sandbox.paypal.com/signout" target="_blank" rel="noreferrer" className="font-semibold underline">
+                Sign out of PayPal sandbox
+              </a>
+              , then click the PayPal button again and log in as the buyer.
+            </p>
+          )}
         </div>
       ) : null}
 
