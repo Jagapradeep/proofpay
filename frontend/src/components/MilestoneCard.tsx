@@ -19,8 +19,8 @@ const PHASES = [
   { at: 0, text: "Fetching the repository at its latest commit…" },
   { at: 2, text: "Scanning every file for prompt injection (plain code)…" },
   { at: 4, text: "Verifier agent is reading files and checking each criterion…" },
-  { at: 16, text: "Checking that every evidence quote really exists…" },
-  { at: 20, text: "Policy gate is deciding; PayPal capture + payout if approved…" },
+  { at: 9, text: "Checking that every evidence quote really exists…" },
+  { at: 11, text: "Policy gate is deciding; PayPal capture + payout if approved…" },
 ];
 
 export function MilestoneCard({ job, milestone: m, release, onChange }: {
@@ -105,7 +105,7 @@ export function MilestoneCard({ job, milestone: m, release, onChange }: {
             {busy === "verify" && <span className="spinner" />} Run AI verification
           </button>
           {busy === "verify" && (
-            <p className="mt-2 text-sm text-muted">{phase} <span className="font-mono">{elapsed}s</span> <span className="text-xs">(usually 20 to 30 s)</span></p>
+            <p className="mt-2 text-sm text-muted">{phase} <span className="font-mono">{elapsed}s</span> <span className="text-xs">(usually 10 to 30 s; instant if this exact commit was checked before)</span></p>
           )}
         </div>
       )}

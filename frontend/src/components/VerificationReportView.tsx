@@ -14,6 +14,11 @@ export function VerificationReportView({ report, currency }: { report: Verificat
             {released ? "✓ Gate approved: payment released" : report.injectionFlagged ? "⛔ Blocked: prompt injection" : "⛔ Blocked: sent to human review"}
           </span>
           <span className="ml-auto text-xs text-slate-600">
+            {report.cachedVerdict && (
+              <span className="mr-2 rounded-full bg-white/70 px-2 py-0.5 font-medium" title="Same commit, same criteria and same model as an earlier run: the agent's answer was reused. The injection scan, evidence check and policy gate ran again.">
+                reused AI verdict
+              </span>
+            )}
             {report.model} · {(report.durationMs / 1000).toFixed(0)} s · {when(report.verifiedAt)}
           </span>
         </div>

@@ -19,7 +19,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     demoFreelancerEmail: process.env.DEMO_FREELANCER_EMAIL ?? "",
   };
   return (
-    <html lang="en">
+    // Browser extensions (e.g. QuillBot, Grammarly) add attributes to <html>; don't treat that as an error.
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <Providers config={config}>
           <Header />

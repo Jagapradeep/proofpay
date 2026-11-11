@@ -48,7 +48,7 @@ services:
       - key: OPENAI_MODEL
         value: gpt-5-mini
       - key: OPENAI_REASONING_EFFORT
-        value: low
+        value: minimal
       - key: GITHUB_TOKEN
         sync: false
       - key: JAVA_OPTS

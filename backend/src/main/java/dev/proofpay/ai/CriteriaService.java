@@ -1,6 +1,7 @@
 package dev.proofpay.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.proofpay.ai.Criteria.*;
 import dev.proofpay.audit.AuditService;
@@ -30,9 +31,11 @@ public class CriteriaService {
     private final AuditService audit;
     private final ObjectMapper json;
     private final TransactionTemplate tx;
+    private final AiCache cache;
 
     public CriteriaService(CriteriaCompiler compiler, AiProperties ai, JobRepository jobs, AuditService audit,
-                           ObjectMapper json, TransactionTemplate tx) {
+                           ObjectMapper json, TransactionTemplate tx, AiCache cache) {
+        this.cache = cache;
         this.compiler = compiler;
         this.ai = ai;
         this.jobs = jobs;
@@ -43,8 +46,8 @@ public class CriteriaService {
 
     private record JobText(String title, String description, String milestones, int count) {}
 
-    public void compile(UUID jobId) {
-        ai.requireEnabled();
+    /** @param fresh true = always ask the LLM ("Regenerate"); false = reuse an identical earlier answer. */
+    public void compile(UUID jobId, boolean fresh) {
         JobText text = tx.execute(s -> {
             Job job = load(jobId);
             requireEditable(job);
@@ -54,14 +57,26 @@ public class CriteriaService {
             return new JobText(job.getTitle(), job.getDescription(), ms, job.getMilestones().size());
         });
 
-        // The LLM call runs outside any transaction (it can take a while).
-        CompiledCriteria compiled;
-        try {
-            compiled = compiler.compile(text.title(), text.description(), text.milestones());
-        } catch (RuntimeException e) {
-            throw new AiUnavailableException("Criteria compiler failed: " + e.getMessage(), e);
+        String key = AiCache.key(AiCache.Kind.CRITERIA, ai.model(), ai.reasoningEffort(),
+                text.title(), text.description(), text.milestones());
+        Map<Integer, List<Criterion>> cached = fresh ? null : cache.get(key).map(this::readCriteria).orElse(null);
+        boolean fromCache = cached != null;
+
+        Map<Integer, List<Criterion>> bySeq;
+        if (fromCache) {
+            bySeq = cached;
+        } else {
+            ai.requireEnabled();
+            // The LLM call runs outside any transaction (it can take a while).
+            CompiledCriteria compiled;
+            try {
+                compiled = compiler.compile(text.title(), text.description(), text.milestones());
+            } catch (RuntimeException e) {
+                throw new AiUnavailableException("Criteria compiler failed: " + e.getMessage(), e);
+            }
+            bySeq = normalize(compiled, text.count());
+            cache.put(key, AiCache.Kind.CRITERIA, ai.model(), write(bySeq));
         }
-        Map<Integer, List<Criterion>> bySeq = normalize(compiled, text.count());
 
         tx.executeWithoutResult(s -> {
             Job job = load(jobId);
@@ -73,7 +88,7 @@ public class CriteriaService {
             job.setClientAcceptedCriteriaAt(null);
             job.setFreelancerAcceptedCriteriaAt(null);
             audit.record(jobId, null, null, "CRITERIA_COMPILED", AuditService.AGENT,
-                    Map.of("model", ai.model(), "criteria", bySeq));
+                    Map.of("model", ai.model(), "cached", fromCache, "criteria", bySeq));
         });
     }
 
@@ -112,6 +127,14 @@ public class CriteriaService {
             }
         }
         return out;
+    }
+
+    private Map<Integer, List<Criterion>> readCriteria(String s) {
+        try {
+            return json.readValue(s, new TypeReference<Map<Integer, List<Criterion>>>() {});
+        } catch (JsonProcessingException e) {
+            return null; // unreadable cache entry: just ask the LLM again
+        }
     }
 
     private Job load(UUID id) {

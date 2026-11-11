@@ -70,9 +70,25 @@ When `PROOFPAY_API_KEY` is set, every `/api/**` call needs the `X-Api-Key` heade
 verified by signature). The browser never sees the key: it calls the Next.js server, which proxies to the API and
 adds it. The AI endpoints are rate limited (20/hour per IP, 120/hour overall by default).
 
-### Regression check
-`python scripts/api_regression.py http://localhost:8080` runs 38 API checks (validation, state guards, criteria
-locking, idempotent orders, gate blocks). Set `PROOFPAY_API_KEY` in the environment if the API needs it.
+The key is any long random string, and the **same value** goes in `.env` (backend) and `frontend/.env.local` (web
+app). Leave both empty on localhost (API open). On Render it is generated and shared between the services for you.
+
+### AI cost
+- Default model `gpt-5-mini` with `OPENAI_REASONING_EFFORT=minimal`: about 10 s per verification, and correct on all
+  three demo repos. (`gpt-5-nano` was tested and is not reliable enough for the verifier.)
+- **Answer cache** (`ai_cache` table): the same job text gives the same criteria, and the same repo commit with the
+  same criteria and model gives the same verdict, without calling OpenAI again. Only the model's answer is reused:
+  the injection scan, evidence check and policy gate run every time. "Regenerate with AI" bypasses the cache;
+  `AI_CACHE_ENABLED=false` turns it off.
+- Set a monthly budget on your OpenAI project as a hard ceiling.
+
+### Tests
+- `cd backend && ./mvnw test`: 56 unit tests (policy gate, state machine, PayPal client contracts, injection
+  scanner, evidence checker, the real LangChain4j tool loop with a scripted model, API key filter, AI cache).
+  No network, no OpenAI cost.
+- `python scripts/api_regression.py http://localhost:8080`: 38 API checks against a running backend
+  (validation, state guards, criteria locking, idempotent orders, gate blocks). Set `PROOFPAY_API_KEY` in the
+  environment if the API needs it.
 
 ### Try the flow with curl
 
@@ -95,13 +111,16 @@ curl -X POST localhost:8080/api/jobs/<jobId>/order
 # 4. After approving, authorize (money is now held)
 curl -X POST localhost:8080/api/jobs/<jobId>/authorize
 
-# 4. Freelancer submits, then a release is proposed (the AI verifier will call this)
+# 5. Freelancer submits; the verifier agent checks it and proposes a release to the policy gate
 curl -X POST localhost:8080/api/milestones/<milestoneId>/submit -H 'Content-Type: application/json' \
-  -d '{"deliverableUrl": "https://github.com/<user>/<repo>"}'
+  -d '{"deliverableUrl": "https://github.com/Jagapradeep/proofpay-demo-good"}'
+curl -X POST localhost:8080/api/milestones/<milestoneId>/verify     # ~10 s; returns the full report
+
+# (Human-review stand-in for the agent: goes through the same gate)
 curl -X POST localhost:8080/api/milestones/<milestoneId>/propose-release -H 'Content-Type: application/json' \
   -d '{"amount": 40, "confidence": 0.93, "injectionFlagged": false, "evidence": ["README documents all endpoints"]}'
 
-# 5. Watch the ledger
+# 6. Watch the ledger
 curl localhost:8080/api/ledger
 ```
 
@@ -119,7 +138,7 @@ Free instances sleep after 15 minutes idle; the first request then takes about a
 
 ## Tech
 Spring Boot 3.5, Java 21, PostgreSQL + Flyway, Spring `RestClient` for PayPal REST (cached OAuth token),
-LangChain4j 1.22 with OpenAI (`gpt-5-mini` by default; AI services, `@Tool`, strict JSON schema output).
+LangChain4j 1.22 with OpenAI (`gpt-5-mini`, minimal reasoning; AI services, `@Tool`, strict JSON schema output).
 Frontend: Next.js 16 (App Router), React 19, Tailwind 4, PayPal JS SDK via `@paypal/react-paypal-js`
 (`intent=authorize`), AG Grid Community 36 for the ledger. Hosting: Render (Docker).
 

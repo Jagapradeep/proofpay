@@ -22,7 +22,10 @@ export function AuditTimeline({ events }: { events: AuditEvent[] }) {
         {events.map((e) => (
           <li key={e.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
             <span className="w-36 shrink-0 font-mono text-xs text-muted">{when(e.createdAt)}</span>
-            <span className={`rounded px-2 py-0.5 text-xs font-semibold ${ACTOR[e.actor] ?? ACTOR.SYSTEM}`}>{label(e.actor)}</span>
+            {/* Fixed width so the event column lines up whatever the actor label length */}
+            <span className={`w-24 shrink-0 truncate rounded px-2 py-0.5 text-center text-xs font-semibold ${ACTOR[e.actor] ?? ACTOR.SYSTEM}`}>
+              {label(e.actor)}
+            </span>
             <div className="min-w-0 flex-1">
               <span className={IMPORTANT.has(e.type) ? "font-semibold" : ""}>{label(e.type)}</span>
               {e.detail && <Detail json={e.detail} />}

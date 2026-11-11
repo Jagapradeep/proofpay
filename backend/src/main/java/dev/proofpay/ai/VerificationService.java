@@ -52,10 +52,12 @@ public class VerificationService {
     private final AuditService audit;
     private final ObjectMapper json;
     private final TransactionTemplate tx;
+    private final AiCache cache;
 
     public VerificationService(AiProperties ai, ChatModel model, RepoFetcher fetcher, InjectionScanner scanner,
                                EvidenceChecker checker, ReleaseService releases, MilestoneRepository milestones,
-                               AuditService audit, ObjectMapper json, TransactionTemplate tx) {
+                               AuditService audit, ObjectMapper json, TransactionTemplate tx, AiCache cache) {
+        this.cache = cache;
         this.ai = ai;
         this.model = model;
         this.fetcher = fetcher;
@@ -75,7 +77,11 @@ public class VerificationService {
                          boolean agentInjectionSuspected, boolean injectionFlagged, BigDecimal proposedAmount,
                          Double agentConfidence, Double effectiveConfidence, List<String> adjustments,
                          Boolean gateApproved, List<String> gateReasons, UUID releaseId, String agentSummary,
-                         String agentReply, String model, long durationMs, Instant verifiedAt) {}
+                         String agentReply, String model, boolean cachedVerdict, long durationMs,
+                         Instant verifiedAt) {}
+
+    /** What we keep from an agent run: only the LLM's answer, never the gate's decision. */
+    record CachedVerdict(Verdict verdict, List<String> filesRead, String reply) {}
 
     record Context(UUID jobId, UUID milestoneId, int seq, String title, BigDecimal amount, String currency,
                    String url, List<Criterion> criteria) {}
@@ -91,7 +97,6 @@ public class VerificationService {
     }
 
     public Report verify(UUID milestoneId) {
-        ai.requireEnabled();
         long started = System.currentTimeMillis();
         Context ctx = tx.execute(s -> load(milestoneId));
 
@@ -105,6 +110,21 @@ public class VerificationService {
                         "flagged", scan.flagged(), "findings", scan.findings()));
 
         Decision decision = new Decision();
+        // Same repo commit + same criteria + same model => reuse the agent's earlier answer (no LLM call).
+        // The scan above, the evidence check and the policy gate in decide() still run on the live state.
+        String key = AiCache.key(AiCache.Kind.VERDICT, ai.model(), ai.reasoningEffort(),
+                repo.owner() + "/" + repo.repo(), repo.commitSha(), write(ctx.criteria()), ctx.title(),
+                ctx.amount().toPlainString(), ctx.currency());
+        Optional<CachedVerdict> hit = cache.get(key).map(this::readVerdict);
+        if (hit.isPresent()) {
+            CachedVerdict c = hit.get();
+            audit.record(ctx.jobId(), milestoneId, null, "AI_CACHE_HIT", AuditService.SYSTEM,
+                    Map.of("commit", repo.commitSha(), "model", ai.model()));
+            decide(ctx, repo, scan, c.verdict(), decision);
+            return finish(ctx, repo, scan, Optional.of(c.verdict()), c.filesRead(), decision, c.reply(), true, started);
+        }
+
+        ai.requireEnabled();
         VerifierTools tools = new VerifierTools(repo, v -> decide(ctx, repo, scan, v, decision));
         VerifierAgent agent = AiServices.builder(VerifierAgent.class)
                 .chatModel(model)
@@ -129,7 +149,18 @@ public class VerificationService {
             reply = "";
         }
 
-        Report report = report(ctx, repo, scan, tools, decision, reply, System.currentTimeMillis() - started);
+        if (tools.verdict().isPresent()) {
+            cache.put(key, AiCache.Kind.VERDICT, ai.model(),
+                    write(new CachedVerdict(tools.verdict().get(), tools.filesRead(), reply)));
+        }
+        return finish(ctx, repo, scan, tools.verdict(), tools.filesRead(), decision, reply, false, started);
+    }
+
+    private Report finish(Context ctx, RepoSnapshot repo, ScanResult scan, Optional<Verdict> verdict,
+                          List<String> filesRead, Decision decision, String reply, boolean cached, long started) {
+        UUID milestoneId = ctx.milestoneId();
+        Report report = report(ctx, repo, scan, verdict, filesRead, decision, reply, cached,
+                System.currentTimeMillis() - started);
         tx.executeWithoutResult(s -> {
             Milestone m = milestones.findById(milestoneId).orElseThrow();
             m.setVerificationJson(write(report));
@@ -195,19 +226,27 @@ public class VerificationService {
                   + ". The milestone now waits for human review.";
     }
 
-    private Report report(Context ctx, RepoSnapshot repo, ScanResult scan, VerifierTools tools, Decision d,
-                          String reply, long ms) {
-        Optional<Verdict> v = tools.verdict();
+    private Report report(Context ctx, RepoSnapshot repo, ScanResult scan, Optional<Verdict> v, List<String> filesRead,
+                          Decision d, String reply, boolean cached, long ms) {
         Outcome outcome = d.result == null ? Outcome.NO_VERDICT
                 : d.result.decision().approved() ? Outcome.RELEASED : Outcome.BLOCKED;
         return new Report(ctx.milestoneId(), outcome, repo.url(), repo.commitSha(), repo.files().size(),
-                tools.filesRead(), d.checked == null ? List.of() : d.checked.criteria(), scan.findings(),
+                filesRead, d.checked == null ? List.of() : d.checked.criteria(), scan.findings(),
                 v.map(Verdict::injectionSuspected).orElse(false), d.result != null ? d.injectionFlagged : scan.flagged(),
                 d.amount, v.map(Verdict::confidence).orElse(null), d.result == null ? null : d.effectiveConfidence,
                 d.adjustments, d.result == null ? null : d.result.decision().approved(),
                 d.result == null ? List.of() : d.result.decision().reasons(),
                 d.result == null ? null : d.result.releaseId(), v.map(Verdict::summary).orElse(null), reply,
-                ai.model(), ms, Instant.now());
+                ai.model(), cached, ms, Instant.now());
+    }
+
+    private CachedVerdict readVerdict(String s) {
+        try {
+            CachedVerdict c = json.readValue(s, CachedVerdict.class);
+            return c.verdict() == null ? null : c;
+        } catch (JsonProcessingException e) {
+            return null; // unreadable cache entry: run the agent again
+        }
     }
 
     private Context load(UUID milestoneId) {

@@ -76,8 +76,8 @@ public class JobController {
     // ---- criteria (AI compiler; both sides accept before funding) ----
 
     @PostMapping("/jobs/{id}/criteria")
-    public JobView compileCriteria(@PathVariable UUID id) {
-        criteria.compile(id);
+    public JobView compileCriteria(@PathVariable UUID id, @RequestParam(defaultValue = "false") boolean fresh) {
+        criteria.compile(id, fresh);
         return view(id);
     }
 

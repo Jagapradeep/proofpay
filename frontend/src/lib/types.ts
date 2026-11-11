@@ -92,6 +92,7 @@ export interface VerificationReport {
   agentSummary: string | null;
   agentReply: string | null;
   model: string;
+  cachedVerdict: boolean;
   durationMs: number;
   verifiedAt: string;
 }

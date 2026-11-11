@@ -39,7 +39,7 @@ export function CriteriaPanel({ job, onChange }: { job: Job; onChange: () => voi
         </div>
         {editable && role === "CLIENT" && (
           <button className={compiled ? "btn-ghost ml-auto" : "btn-primary ml-auto"} disabled={busy !== null}
-            onClick={() => run("compile", () => api.compileCriteria(job.id))}>
+            onClick={() => run("compile", () => api.compileCriteria(job.id, compiled))}>
             {busy === "compile" && <span className="spinner" />}
             {compiled ? "Regenerate with AI" : "Generate criteria with AI"}
           </button>

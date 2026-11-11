@@ -40,9 +40,11 @@ proofpay:
     openai-api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5-mini}
     # Only for reasoning models (gpt-5*, o*); leave blank for gpt-4.1 etc.
-    reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
+    reasoning-effort: ${OPENAI_REASONING_EFFORT:minimal}
     timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:120}
     github-token: ${GITHUB_TOKEN:}
+    # Reuse identical AI answers (same job text / same commit + criteria + model). Gate still runs.
+    cache-enabled: ${AI_CACHE_ENABLED:true}
 
 management:
   endpoints:

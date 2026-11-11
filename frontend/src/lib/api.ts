@@ -45,7 +45,7 @@ export const api = {
   jobs: () => call<Job[]>("GET", "/jobs"),
   job: (id: string) => call<Job>("GET", `/jobs/${id}`),
   createJob: (j: NewJob) => call<Job>("POST", "/jobs", j),
-  compileCriteria: (id: string) => call<Job>("POST", `/jobs/${id}/criteria`),
+  compileCriteria: (id: string, fresh = false) => call<Job>("POST", `/jobs/${id}/criteria${fresh ? "?fresh=true" : ""}`),
   acceptCriteria: (id: string, party: "CLIENT" | "FREELANCER") =>
     call<Job>("POST", `/jobs/${id}/criteria/accept`, { party }),
   createOrder: (id: string) => call<OrderInfo>("POST", `/jobs/${id}/order`),
