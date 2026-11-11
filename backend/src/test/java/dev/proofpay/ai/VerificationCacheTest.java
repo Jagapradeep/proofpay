@@ -71,8 +71,7 @@ class VerificationCacheTest {
                         {"results":[{"criterionId":"M1-C1","passed":true,"score":0.95,
                           "evidence":[{"path":"tempconv/core.py","quote":"return c * 9 / 5 + 32"}],"note":"ok"}],
                          "amount":40,"confidence":0.9,"injectionSuspected":false,"summary":"All good."}
-                        """).build()),
-                AiMessage.from("Done."));
+                        """).build()));
 
         service = new VerificationService(new AiProperties("key", "gpt-test", "low", 10, ""), model, fetcher,
                 new InjectionScanner(), new EvidenceChecker(), releases, milestones, mock(AuditService.class),
@@ -84,7 +83,7 @@ class VerificationCacheTest {
     void secondRunReusesTheVerdictButStillGoesThroughTheGate() {
         var first = service.verify(milestone.getId());
         int llmCalls = model.turn;
-        assertThat(llmCalls).isEqualTo(3);
+        assertThat(llmCalls).isEqualTo(2);
         assertThat(first.cachedVerdict()).isFalse();
         assertThat(first.outcome()).isEqualTo(VerificationService.Outcome.RELEASED);
         assertThat(store).hasSize(1);
@@ -92,7 +91,7 @@ class VerificationCacheTest {
         var second = service.verify(milestone.getId());
         assertThat(model.turn).as("no new LLM calls").isEqualTo(llmCalls);
         assertThat(second.cachedVerdict()).isTrue();
-        assertThat(second.filesRead()).containsExactly("tempconv/core.py");
+        assertThat(second.filesRead()).containsExactly("README.md", "tempconv/core.py");
         assertThat(second.criteria()).singleElement().satisfies(c -> assertThat(c.proven()).isTrue());
 
         // The gate saw the same proposal both times: the cache only replaces the LLM call.

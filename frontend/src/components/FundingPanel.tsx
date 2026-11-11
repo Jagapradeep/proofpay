@@ -8,7 +8,7 @@ import type { Job } from "@/lib/types";
 import { useApp } from "./Providers";
 import { StatusBadge } from "./StatusBadge";
 
-export function FundingPanel({ job, onChange }: { job: Job; onChange: () => void }) {
+export function FundingPanel({ job, onChange }: { job: Job; onChange: () => Promise<void> }) {
   const { role, config } = useApp();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +37,7 @@ export function FundingPanel({ job, onChange }: { job: Job; onChange: () => void
     setError(null);
     try {
       await api.voidFunding(job.id);
-      onChange();
+      await onChange();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -83,7 +83,7 @@ export function FundingPanel({ job, onChange }: { job: Job; onChange: () => void
                   setBusy(true);
                   try {
                     await api.authorize(job.id);
-                    onChange();
+                    await onChange();
                   } catch (e) {
                     setError((e as Error).message);
                   } finally {

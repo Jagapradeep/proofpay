@@ -21,10 +21,17 @@ export default function JobPage() {
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const lastNudge = useRef(0);
+  const latestRequest = useRef(0);
+  const loading = useRef(0);
 
   const load = useCallback(async () => {
+    // Background polls and action refreshes can overlap. Only the most recently started load may update the
+    // page, so a slow, older response can never put stale state (e.g. an old report) back on screen.
+    const requestId = ++latestRequest.current;
+    loading.current++;
     try {
       const [j, ledger, events] = await Promise.all([api.job(id), api.ledger(), api.audit(id)]);
+      if (requestId !== latestRequest.current) return;
       const mine = ledger.filter((r) => r.jobId === id);
       setJob(j);
       setReleases(mine);
@@ -37,18 +44,22 @@ export default function JobPage() {
         await Promise.all(pending.map((r) => api.refreshRelease(r.releaseId).catch(() => undefined)));
       }
     } catch (e) {
-      setError((e as Error).message);
+      if (requestId === latestRequest.current) setError((e as Error).message);
+    } finally {
+      loading.current--;
     }
   }, [id]);
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 4000);
+    // Background refresh; skipped while another load is still running (slow or waking server).
+    const t = setInterval(() => {
+      if (loading.current === 0) load();
+    }, 4000);
     return () => clearInterval(t);
   }, [load]);
 
-  if (error && !job) return <p className="card p-6 text-bad">Could not load the job: {error}</p>;
-  if (!job) return <p className="text-muted">Loading…</p>;
+  if (!job) return <WaitingForServer error={error} what="job" />;
 
   return (
     <div className="space-y-6">
@@ -93,6 +104,19 @@ export default function JobPage() {
 
       <AuditTimeline events={audit} />
       {error && <p className="text-xs text-warn">Refresh failed: {error} (retrying)</p>}
+    </div>
+  );
+}
+
+/** First load: a sleeping Render instance can take ~1 min to wake, so keep retrying instead of failing. */
+function WaitingForServer({ error, what }: { error: string | null; what: string }) {
+  if (error && /not found/i.test(error)) {
+    return <p className="card p-6 text-bad">{error}</p>;
+  }
+  return (
+    <div className="card flex items-center gap-3 p-6 text-sm text-muted">
+      <span className="spinner text-brand" />
+      {error ? `Waiting for the server to wake up (it sleeps when idle)… retrying.` : `Loading the ${what}…`}
     </div>
   );
 }

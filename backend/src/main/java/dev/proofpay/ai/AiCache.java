@@ -21,7 +21,7 @@ public class AiCache {
     public enum Kind { CRITERIA, VERDICT }
 
     /** Bump when a prompt or tool schema changes, so old answers stop matching. */
-    static final String PROMPT_VERSION = "2026-11-11";
+    static final String PROMPT_VERSION = "2026-11-11b";
 
     private final JdbcTemplate jdbc;
     private final boolean enabled;

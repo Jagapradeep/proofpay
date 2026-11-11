@@ -6,7 +6,7 @@ import { when } from "@/lib/format";
 import type { Criterion, Job } from "@/lib/types";
 import { useApp } from "./Providers";
 
-export function CriteriaPanel({ job, onChange }: { job: Job; onChange: () => void }) {
+export function CriteriaPanel({ job, onChange }: { job: Job; onChange: () => Promise<void> }) {
   const { role } = useApp();
   const [busy, setBusy] = useState<"compile" | "accept" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function CriteriaPanel({ job, onChange }: { job: Job; onChange: () => voi
     setError(null);
     try {
       await fn();
-      onChange();
+      await onChange();
     } catch (e) {
       setError((e as Error).message);
     } finally {

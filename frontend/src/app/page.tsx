@@ -19,9 +19,26 @@ export default function JobsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.jobs()
-      .then((j) => setJobs([...j].sort((a, b) => b.createdAt.localeCompare(a.createdAt))))
-      .catch((e: Error) => setError(e.message));
+    // A sleeping Render instance takes ~1 min to wake: keep retrying instead of showing a dead end.
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = () =>
+      api.jobs()
+        .then((j) => {
+          if (stopped) return;
+          setJobs([...j].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+          setError(null);
+        })
+        .catch((e: Error) => {
+          if (stopped) return;
+          setError(e.message);
+          timer = setTimeout(load, 5000);
+        });
+    load();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (
@@ -59,8 +76,12 @@ export default function JobsPage() {
           <h2 className="text-lg font-semibold">Jobs</h2>
           {jobs && <span className="text-sm text-muted">{jobs.length} total</span>}
         </div>
-        {error && <p className="card p-4 text-sm text-bad">Could not load jobs: {error}</p>}
-        {!jobs && !error && <p className="text-sm text-muted">Loading…</p>}
+        {!jobs && (
+          <p className="card flex items-center gap-3 p-4 text-sm text-muted">
+            <span className="spinner text-brand" />
+            {error ? "Waiting for the server to wake up (it sleeps when idle)… retrying." : "Loading jobs…"}
+          </p>
+        )}
         {jobs?.length === 0 && (
           <div className="card p-8 text-center text-muted">
             No jobs yet. <Link href="/jobs/new" className="font-medium text-brand">Post the first one</Link>.

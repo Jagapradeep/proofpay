@@ -25,10 +25,23 @@ export default function LedgerPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const load = () => api.ledger().then((r) => { setRows(r); setError(null); }).catch((e: Error) => setError(e.message));
+    let inFlight = false;
+    let stopped = false;
+    const load = async () => {
+      if (inFlight) return; // never let polls overlap (a slow response could overwrite a newer one)
+      inFlight = true;
+      try {
+        const r = await api.ledger();
+        if (!stopped) { setRows(r); setError(null); }
+      } catch (e) {
+        if (!stopped) setError((e as Error).message);
+      } finally {
+        inFlight = false;
+      }
+    };
     load();
     const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    return () => { stopped = true; clearInterval(t); };
   }, []);
 
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
@@ -86,7 +99,12 @@ export default function LedgerPage() {
         <Tile label="Failed (needs action)" value={String(totals.failed)} tone={totals.failed ? "bad" : undefined} />
       </div>
 
-      {error && <p className="card p-4 text-sm text-bad">Could not load the ledger: {error}</p>}
+      {error && (
+        <p className="card flex items-center gap-3 p-4 text-sm text-muted">
+          <span className="spinner text-brand" />
+          {rows ? "Lost contact with the server; retrying…" : "Waiting for the server to wake up (it sleeps when idle)… retrying."}
+        </p>
+      )}
       <div className="card overflow-hidden" style={{ height: 520 }}>
         <AgGridReact<LedgerRow>
           theme={theme}
@@ -95,7 +113,7 @@ export default function LedgerPage() {
           getRowId={(p) => p.data.releaseId}
           defaultColDef={{ sortable: true, resizable: true }}
           overlayNoRowsTemplate="No releases yet. They appear here when the policy gate approves a milestone."
-          loading={rows === null && !error}
+          loading={rows === null}
         />
       </div>
     </div>

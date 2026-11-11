@@ -54,6 +54,7 @@ public class JobService {
             throw new IllegalStateException("Milestone is " + m.getStatus() + ", cannot submit");
         }
         m.setDeliverableUrl(deliverableUrl);
+        m.setVerificationJson(null); // the previous report was about the previous deliverable
         m.setStatus(MilestoneStatus.SUBMITTED);
         audit.record(m.getJob().getId(), m.getId(), null, "DELIVERABLE_SUBMITTED", AuditService.FREELANCER,
                 Map.of("url", deliverableUrl));

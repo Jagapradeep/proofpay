@@ -129,7 +129,7 @@ public class VerificationService {
         VerifierAgent agent = AiServices.builder(VerifierAgent.class)
                 .chatModel(model)
                 .tools(tools)
-                .maxSequentialToolsInvocations(30)
+                .maxSequentialToolsInvocations(12)
                 // Bad tool arguments: let the LLM retry. Exceptions inside our code: never shown to the LLM.
                 .toolArgumentsErrorHandler(ToolArgumentsErrorHandler.sendExceptionMessageToLlm())
                 .toolExecutionErrorHandler(ToolExecutionErrorHandler.failInvocationUnlessVisibleToLlm())
@@ -137,7 +137,8 @@ public class VerificationService {
 
         String reply;
         try {
-            reply = agent.verify(brief(ctx, repo));
+            var result = agent.verify(brief(ctx, repo, tools));
+            reply = result.content() != null ? result.content() : tools.verdictReply();
         } catch (RuntimeException e) {
             if (tools.verdict().isEmpty()) {
                 audit.record(ctx.jobId(), milestoneId, null, "VERIFICATION_FAILED", AuditService.SYSTEM,
@@ -271,7 +272,7 @@ public class VerificationService {
                 m.getJob().getCurrency(), m.getDeliverableUrl(), criteria);
     }
 
-    String brief(Context ctx, RepoSnapshot repo) {
+    String brief(Context ctx, RepoSnapshot repo, VerifierTools tools) {
         StringBuilder sb = new StringBuilder();
         sb.append("Milestone ").append(ctx.seq()).append(": ").append(ctx.title()).append('\n');
         sb.append("Milestone amount: ").append(ctx.amount()).append(' ').append(ctx.currency()).append('\n');
@@ -285,7 +286,9 @@ public class VerificationService {
         sb.append("\nFiles in the repository (").append(repo.allPaths().size()).append("):\n");
         repo.allPaths().stream().limit(300).forEach(p -> sb.append(p)
                 .append(repo.files().containsKey(p) ? "" : "  [not fetched]").append('\n'));
-        sb.append("\nRead the README and the files relevant to each criterion, then call proposeRelease once.");
+        repo.files().keySet().stream().filter(p -> p.toLowerCase(java.util.Locale.ROOT).startsWith("readme")).findFirst()
+                .ifPresent(readme -> sb.append("\nREADME (already read for you):\n").append(tools.readFile(readme)).append('\n'));
+        sb.append("\nRead every other file you need in ONE readFiles call, then call proposeRelease once.");
         return sb.toString();
     }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogoMark } from "./Logo";
 import { useApp, type Role } from "./Providers";
 
 const NAV = [
@@ -17,7 +18,7 @@ export function Header() {
     <header className="sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-bold text-white">P</span>
+          <LogoMark className="h-8 w-8" />
           <span className="text-lg font-semibold tracking-tight">ProofPay</span>
           <span className="hidden rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn sm:inline">
             PayPal sandbox

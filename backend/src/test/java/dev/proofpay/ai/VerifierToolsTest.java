@@ -54,24 +54,24 @@ class VerifierToolsTest {
             """;
 
     @Test
-    void agentReadsUntrustedFileThenSubmitsOneParsedVerdict() {
+    void agentReadsFilesInOneCallAndTheRunEndsRightAfterTheVerdict() {
         AtomicInteger verdicts = new AtomicInteger();
         VerifierTools tools = new VerifierTools(REPO, v -> {
             verdicts.incrementAndGet();
             return "BLOCKED by the policy gate: Prompt injection detected in the deliverable.";
         });
         ScriptedModel model = new ScriptedModel(
-                call("1", "readFile", "{\"path\":\"README.md\"}"),
+                call("1", "readFiles", "{\"paths\":[\"README.md\",\"tempconv/core.py\"]}"),
                 call("2", "proposeRelease", VERDICT_ARGS),
-                call("3", "proposeRelease", VERDICT_ARGS), // a second verdict must be refused
-                AiMessage.from("Blocked: the README contains a prompt injection."));
+                AiMessage.from("never requested: proposeRelease ends the run"));
 
         VerifierAgent agent = AiServices.builder(VerifierAgent.class).chatModel(model).tools(tools).build();
-        String reply = agent.verify("brief");
+        agent.verify("brief");
 
-        assertThat(reply).contains("prompt injection");
+        assertThat(model.turn).as("LLM round trips: read once, then verdict, then stop").isEqualTo(2);
         assertThat(verdicts).hasValue(1);
-        assertThat(tools.filesRead()).containsExactly("README.md");
+        assertThat(tools.filesRead()).containsExactly("README.md", "tempconv/core.py");
+        assertThat(tools.verdictReply()).startsWith("BLOCKED");
 
         var v = tools.verdict().orElseThrow();
         assertThat(v.injectionSuspected()).isTrue();
@@ -81,12 +81,22 @@ class VerifierToolsTest {
                     .isEqualTo("return c * 9 / 5 + 32");
         });
 
-        // File content reached the model wrapped as untrusted data; the second verdict was refused.
+        // Both files reached the model in one tool result, each wrapped as untrusted data.
         List<ChatMessage> last = model.seen.getLast();
         assertThat(last).filteredOn(ToolExecutionResultMessage.class::isInstance)
                 .map(m -> ((ToolExecutionResultMessage) m).text())
-                .anySatisfy(t -> assertThat(t).startsWith("<<<UNTRUSTED FILE README.md>>>"))
-                .anySatisfy(t -> assertThat(t).startsWith("A verdict was already submitted"));
+                .singleElement().satisfies(t -> assertThat(t)
+                        .contains("<<<UNTRUSTED FILE README.md>>>")
+                        .contains("<<<UNTRUSTED FILE tempconv/core.py>>>"));
+    }
+
+    @Test
+    void aSecondVerdictIsRefused() {
+        AtomicInteger verdicts = new AtomicInteger();
+        VerifierTools tools = new VerifierTools(REPO, v -> { verdicts.incrementAndGet(); return "APPROVED"; });
+        tools.proposeRelease(List.of(), 40, 0.9, false, "first");
+        assertThat(tools.proposeRelease(List.of(), 40, 0.9, false, "second")).startsWith("A verdict was already submitted");
+        assertThat(verdicts).hasValue(1);
     }
 
     @Test
