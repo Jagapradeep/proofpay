@@ -27,7 +27,7 @@ const PHASES = [
 function verifyHint(elapsed: number): string {
   return elapsed < 45
     ? "This usually takes 15 to 30 seconds. You can keep using the page."
-    : "Taking longer than usual (the server may have just woken up). Still working…";
+    : "Taking longer than usual. Still working…";
 }
 
 /** The later of two reports (our own just-returned one vs. the one from the last page refresh). */
@@ -159,6 +159,7 @@ export function MilestoneCard({ job, milestone: m, release, onChange }: {
 
 function ReleaseStrip({ release: r, currency, onChange }: { release: LedgerRow; currency: string; onChange: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const steps = [
     { label: "Gate approved", done: true },
     { label: "Captured", done: ["CAPTURED", "PAYOUT_PENDING", "PAID", "PAYOUT_FAILED"].includes(r.status) },
@@ -186,10 +187,21 @@ function ReleaseStrip({ release: r, currency, onChange }: { release: LedgerRow; 
       {r.failureReason && <p className="mt-2 text-sm text-bad">{r.failureReason}</p>}
       {r.status === "PAYOUT_FAILED" && (
         <button className="btn-ghost mt-3" disabled={busy}
-          onClick={async () => { setBusy(true); try { await api.retryPayout(r.releaseId); } finally { await onChange(); setBusy(false); } }}>
-          Retry payout
+          onClick={async () => {
+            setBusy(true);
+            setRetryError(null);
+            try {
+              await api.retryPayout(r.releaseId);
+            } catch (e) {
+              setRetryError((e as Error).message); // show why the retry was refused instead of failing silently
+            }
+            await onChange();
+            setBusy(false);
+          }}>
+          {busy && <span className="spinner" />} Retry payout
         </button>
       )}
+      {retryError && <p className="mt-2 text-sm text-bad">{retryError}</p>}
     </div>
   );
 }

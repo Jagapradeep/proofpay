@@ -33,7 +33,7 @@ Everything runs on the **PayPal sandbox**: no real money moves.
    GitHub doesn't show. The scanner and the agent flag it, and the policy gate **blocks the payment**.
 5. **Get paid honestly.** Resubmit milestone 1 with the **good** demo repo → *Run AI verification* → $40 is
    captured from the hold and paid out to the freelancer. Do the same for milestone 2 ($60). Open **Ledger** to
-   see every capture and payout (AG Grid); each job page has a full audit trail.
+   see every capture and payout (AG Grid); each job page has a full audit trail (also AG Grid: search, filter by actor, CSV export).
 
 The *partial* demo repo is also there: it is missing some work, so the verifier fails those criteria and nothing
 is paid.
@@ -156,7 +156,7 @@ npm ci && npm run dev         # web app on http://localhost:3000
 3. Back as **Client**: click the PayPal button and log in with the sandbox **buyer** account. $100 is now *held*.
 4. As **Freelancer**, milestone 1: click the *injected* demo repo → *Submit* → *Run AI verification* → blocked.
 5. Resubmit with the *good* demo repo → verified → partial capture + payout. Repeat for milestone 2.
-6. Open **Ledger** (AG Grid) to see captures and payouts; the job page shows the full audit trail.
+6. Open **Ledger** (AG Grid) to see captures and payouts; the job page shows the full audit trail, also an AG Grid.
 
 Demo deliverables: [good](https://github.com/Jagapradeep/proofpay-demo-good) ·
 [partial](https://github.com/Jagapradeep/proofpay-demo-partial) ·
@@ -238,7 +238,7 @@ The Blueprint uses paid Starter instances, so the services do not sleep.
 Spring Boot 3.5, Java 21, PostgreSQL + Flyway, Spring `RestClient` for PayPal REST (cached OAuth token),
 LangChain4j 1.22 with OpenAI (`gpt-5-mini`, minimal reasoning; AI services, `@Tool`, strict JSON schema output).
 Frontend: Next.js 16 (App Router), React 19, Tailwind 4, PayPal JS SDK via `@paypal/react-paypal-js`
-(`intent=authorize`), AG Grid Community 36 for the ledger. Hosting: Render (Docker).
+(`intent=authorize`), AG Grid Community 36 for the ledger and the audit trail. Hosting: Render (Docker).
 
 ## License
 [MIT](LICENSE)

@@ -2,7 +2,17 @@ import { label, money, shortSha, when } from "@/lib/format";
 import type { VerificationReport } from "@/lib/types";
 
 /** The verifier agent's report, plus what the code (scanner, evidence check, gate) did with it. */
-export function VerificationReportView({ report, currency }: { report: VerificationReport; currency: string }) {
+export function VerificationReportView({ report: raw, currency }: { report: VerificationReport; currency: string }) {
+  // Reports are stored JSON; one saved by an older version may lack newer list fields. Never crash the job page on that.
+  const report: VerificationReport = {
+    ...raw,
+    gateReasons: raw.gateReasons ?? [],
+    scannerFindings: raw.scannerFindings ?? [],
+    criteria: (raw.criteria ?? []).map((c) => ({ ...c, evidence: c.evidence ?? [] })),
+    adjustments: raw.adjustments ?? [],
+    filesRead: raw.filesRead ?? [],
+    repoUrl: raw.repoUrl ?? "",
+  };
   const released = report.outcome === "RELEASED";
   const commitUrl = `${report.repoUrl.replace(/\/$/, "").replace(/\.git$/, "")}/tree/${report.commitSha}`;
 
@@ -19,7 +29,7 @@ export function VerificationReportView({ report, currency }: { report: Verificat
                 reused AI verdict
               </span>
             )}
-            {report.model} · {(report.durationMs / 1000).toFixed(0)} s · {when(report.verifiedAt)}
+            {report.model} · {((report.durationMs ?? 0) / 1000).toFixed(0)} s · {when(report.verifiedAt)}
           </span>
         </div>
         <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">

@@ -99,11 +99,13 @@ export function AuditTimeline({ events }: { events: AuditEvent[] }) {
     ];
   }, [events]);
 
-  const step = useMemo(() => new Map(events.map((e, i) => [e.id, i + 1])), [events]);
+  // Kept in a ref so the column definitions stay stable while the page polls (no lost sort, filter or widths).
+  const step = useRef(new Map<number, number>());
+  step.current = new Map(events.map((e, i) => [e.id, i + 1]));
 
   const columns = useMemo<ColDef<AuditEvent>[]>(() => [
     // Step number in the order things happened; it stays with its event when the grid is sorted or filtered.
-    { headerName: "Step", width: 84, valueGetter: (p) => (p.data ? step.get(p.data.id) : null), cellClass: "text-muted tabular-nums" },
+    { headerName: "Step", width: 84, valueGetter: (p) => (p.data ? step.current.get(p.data.id) : null), cellClass: "text-muted tabular-nums" },
     { headerName: "Time", field: "createdAt", width: 170, cellClass: "font-mono text-xs", valueFormatter: (p) => when(p.value) },
     {
       headerName: "Who acted", field: "actor", width: 140, filter: true,
@@ -128,7 +130,7 @@ export function AuditTimeline({ events }: { events: AuditEvent[] }) {
         <div className={`py-3 text-xs leading-5 ${p.data && BAD.has(p.data.type) ? "text-bad" : "text-muted"}`}>{p.value}</div>
       ),
     },
-  ], [step]);
+  ], []);
 
   const open = events.find((e) => e.id === openId) ?? null;
   const panel = useRef<HTMLDivElement>(null);

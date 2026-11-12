@@ -52,7 +52,7 @@ export default function JobPage() {
 
   useEffect(() => {
     load();
-    // Background refresh; skipped while another load is still running (slow or waking server).
+    // Background refresh; skipped while another load is still running (slow server).
     const t = setInterval(() => {
       if (loading.current === 0) load();
     }, 4000);
@@ -96,7 +96,7 @@ export default function JobPage() {
         )}
         {job.milestones.map((m) => (
           <MilestoneCard key={m.id} job={job} milestone={m} onChange={load}
-            release={releases.find((r) => r.milestoneSeq === m.seq)} />
+            release={currentRelease(releases, m.seq)} />
         ))}
       </section>
 
@@ -112,7 +112,17 @@ export default function JobPage() {
   );
 }
 
-/** First load: a sleeping Render instance can take ~1 min to wake, so keep retrying instead of failing. */
+/**
+ * A milestone can have several releases: one that failed at capture (no money moved) and a later retry.
+ * Show the live one; if every attempt failed, show the most recent.
+ */
+function currentRelease(releases: LedgerRow[], seq: number): LedgerRow | undefined {
+  const mine = releases.filter((r) => r.milestoneSeq === seq);
+  const newestFirst = [...mine].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return newestFirst.find((r) => r.status !== "CAPTURE_FAILED") ?? newestFirst[0];
+}
+
+/** First load: the server may be restarting, so keep retrying instead of failing. */
 function WaitingForServer({ error, what }: { error: string | null; what: string }) {
   if (error && /not found/i.test(error)) {
     return <p className="card p-6 text-bad">{error}</p>;
@@ -120,7 +130,7 @@ function WaitingForServer({ error, what }: { error: string | null; what: string 
   return (
     <div className="card flex items-center gap-3 p-6 text-sm text-muted">
       <span className="spinner text-brand" />
-      {error ? `Waiting for the server to wake up (it sleeps when idle)… retrying.` : `Loading the ${what}…`}
+      {error ? `Waiting for the server… retrying.` : `Loading the ${what}…`}
     </div>
   );
 }

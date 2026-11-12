@@ -116,4 +116,8 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  /* The gradient only paints inside the box; leave room for descenders (p, y, g). */
+  line-height: 1.2;
+  padding-bottom: 0.15em;
+  display: inline-block; /* box hugs the text so the gradient spans the words, not the column */
 }

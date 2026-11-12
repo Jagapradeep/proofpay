@@ -25,7 +25,8 @@ function FundReturn() {
         const job = (await api.jobs()).find((j) => j.funding?.paypalOrderId === token);
         if (!job) throw new Error("No job found for this PayPal order.");
         setJobId(job.id);
-        if (job.status !== "FUNDED") await api.authorize(job.id);
+        // Reopening an old return link must not try to place a second hold.
+        if (!["FUNDED", "COMPLETED", "CANCELLED"].includes(job.status)) await api.authorize(job.id);
         router.replace(`/jobs/${job.id}`);
       } catch (e) {
         setMessage((e as Error).message);
