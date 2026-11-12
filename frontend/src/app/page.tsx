@@ -19,7 +19,7 @@ export default function JobsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // A sleeping Render instance takes ~1 min to wake: keep retrying instead of showing a dead end.
+    // The server may be restarting: keep retrying instead of showing a dead end.
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const load = () =>
@@ -45,7 +45,7 @@ export default function JobsPage() {
     <div className="space-y-10">
       <section className="grid gap-6 md:grid-cols-[1.2fr_1fr] md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Escrow that pays on proof.</h1>
+          <h1 className="hero-title text-4xl font-bold tracking-tight sm:text-5xl">Escrow that pays on proof.</h1>
           <p className="mt-3 max-w-xl text-muted">
             PayPal holds the client&apos;s money. An AI verifier checks the freelancer&apos;s work against the agreed
             criteria. A policy gate written in plain code decides whether money moves: <b className="text-ink">the LLM
@@ -58,7 +58,7 @@ export default function JobsPage() {
         </div>
         <ol className="grid gap-3 sm:grid-cols-2">
           {STEPS.map((s) => (
-            <li key={s.n} className="card p-4">
+            <li key={s.n} className="card p-4 transition hover:-translate-y-0.5 hover:border-brand">
               <div className="flex items-center gap-2">
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand">
                   {s.n}
@@ -79,7 +79,7 @@ export default function JobsPage() {
         {!jobs && (
           <p className="card flex items-center gap-3 p-4 text-sm text-muted">
             <span className="spinner text-brand" />
-            {error ? "Waiting for the server to wake up (it sleeps when idle)… retrying." : "Loading jobs…"}
+            {error ? "Waiting for the server… retrying." : "Loading jobs…"}
           </p>
         )}
         {jobs?.length === 0 && (

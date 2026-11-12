@@ -23,6 +23,12 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
 }
+body {
+  background-image:
+    radial-gradient(60rem 28rem at 10% -10%, rgb(30 64 175 / 0.09), transparent 60%),
+    radial-gradient(50rem 24rem at 100% 0%, rgb(4 120 87 / 0.07), transparent 60%);
+  background-repeat: no-repeat;
+}
 
 /* Tailwind 4 no longer gives buttons a hand cursor; restore it for everything clickable. */
 @layer base {
@@ -45,11 +51,11 @@ body {
 
 @layer components {
 .card {
-  @apply rounded-xl border border-line bg-white shadow-sm;
+  @apply rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgb(15_23_42/0.04),0_8px_24px_-12px_rgb(15_23_42/0.12)];
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-brand text-white hover:bg-blue-900;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-gradient-to-b from-blue-700 to-brand text-white shadow-sm hover:from-blue-800 hover:to-blue-900;
 }
 .btn-ghost {
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-line bg-white text-ink hover:bg-slate-50;
@@ -81,4 +87,33 @@ body {
   border: 2px solid currentColor;
   border-right-color: transparent;
   animation: spin 0.8s linear infinite;
+}
+
+/* AG Grid row tints and the "live" indicator */
+.ag-row.row-bad { background-color: #fef2f2; }
+.ag-row.row-ok { background-color: #f0fdf4; }
+/* Single-column sort only, so the 1/2 sort-order numbers are never needed. */
+.ag-header-cell .ag-sort-order { display: none; }
+.cursor-copy { cursor: copy; }
+/* Audit rows vary in height: centre every cell vertically so the columns line up. */
+.audit-grid .ag-cell { display: flex; align-items: center; }
+.audit-grid .ag-cell-wrapper { width: 100%; height: auto; align-items: center; }
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(4 120 87 / 0.5); }
+  100% { box-shadow: 0 0 0 7px rgb(4 120 87 / 0); }
+}
+.live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-ok);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+
+.hero-title {
+  background: linear-gradient(90deg, var(--color-ink), var(--color-brand) 70%, var(--color-ok));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }

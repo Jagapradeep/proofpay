@@ -10,8 +10,6 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/).
 
 ## ▶ Try it: https://proofpay-web.onrender.com
 
-> **The first load can take about a minute.** The app runs on Render and wakes up when someone visits.
-> The page says "Waiting for the server to wake up… retrying" and continues by itself.
 
 Everything runs on the **PayPal sandbox**: no real money moves.
 
@@ -234,7 +232,7 @@ curl localhost:8080/api/ledger
 3. Optional: add a PayPal webhook pointing at `https://<api>/api/webhooks/paypal` and set `PAYPAL_WEBHOOK_ID`
    (without it, a 30 s poller tracks captures and payouts).
 
-Free instances sleep after 15 minutes idle; the first request then takes about a minute.
+The Blueprint uses paid Starter instances, so the services do not sleep.
 
 ## Tech
 Spring Boot 3.5, Java 21, PostgreSQL + Flyway, Spring `RestClient` for PayPal REST (cached OAuth token),

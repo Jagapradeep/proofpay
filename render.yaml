@@ -3,7 +3,7 @@
 # Values marked sync: false are asked for during setup (see README "Deploy to Render").
 databases:
   - name: proofpay-db
-    plan: free
+    plan: basic-256mb
     region: oregon
     databaseName: proofpay
     user: proofpay
@@ -12,7 +12,7 @@ services:
   - type: web
     name: proofpay-api
     runtime: docker
-    plan: free
+    plan: starter
     region: oregon
     rootDir: backend
     dockerfilePath: ./Dockerfile
@@ -57,7 +57,7 @@ services:
   - type: web
     name: proofpay-web
     runtime: docker
-    plan: free
+    plan: starter
     region: oregon
     rootDir: frontend
     dockerfilePath: ./Dockerfile
